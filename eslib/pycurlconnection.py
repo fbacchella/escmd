@@ -36,25 +36,6 @@ def get_header_function(headers):
         headers[name] = value
     return header_function
 
-def get_body_function(headers, body_content):
-    # Random object can't have attribute
-    content_encoding_wrapper = lambda : None
-    def body_function(buffer):
-        if not hasattr(content_encoding_wrapper, 'content_encoding'):
-            print(headers)
-            setattr(content_encoding_wrapper, 'content_encoding', headers.get('content-encoding', ''))
-            # Pre-allocate the buffer
-            content_length = headers.get('content-length', None)
-            if content_length is not None:
-                body_content.seek(int(content_length))
-                body_content.write(b'\0')
-                body_content.seek(0)
-        content_encoding = content_encoding_wrapper.content_encoding
-        print('content_encoding', content_encoding)
-        if content_encoding == '':
-            return body_content.write(buffer)
-    return body_function
-
 content_type_re = re.compile("(?P<content_type>.*?); (?:charset=(?P<charset>.*))")
 
 def decode_body(handler, headers, body):
@@ -256,8 +237,8 @@ class PyCyrlConnectionClass(Connection):
         curl_handle.setopt(pycurl.CUSTOMREQUEST, method)
 
         start = time.time()
-        duration = time.time() - start
         curl_handle.perform()
+        duration = time.time() - start
         status = curl_handle.getinfo(pycurl.RESPONSE_CODE)
         curl_handle.close()
 
