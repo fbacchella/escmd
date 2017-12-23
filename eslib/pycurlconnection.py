@@ -223,6 +223,9 @@ class PyCyrlConnectionClass(Connection):
         buffer = BytesIO()
         curl_handle.setopt(pycurl.WRITEDATA, buffer)
 
+        if method == 'HEAD':
+            curl_handle.setopt(pycurl.NOBODY, True)
+
         headers = {}
         curl_handle.setopt(pycurl.HEADERFUNCTION, get_header_function(headers))
 
