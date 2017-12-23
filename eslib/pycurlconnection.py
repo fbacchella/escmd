@@ -36,6 +36,24 @@ def get_header_function(headers):
         headers[name] = value
     return header_function
 
+def get_body_function(headers, body_content):
+    # Random object can't have attribute
+    content_encoding_wrapper = lambda : None
+    def body_function(buffer):
+        if not hasattr(content_encoding_wrapper, 'content_encoding'):
+            print(headers)
+            setattr(content_encoding_wrapper, 'content_encoding', headers.get('content-encoding', ''))
+            # Pre-allocate the buffer
+            content_length = headers.get('content-length', None)
+            if content_length is not None:
+                body_content.seek(int(content_length))
+                body_content.write(b'\0')
+                body_content.seek(0)
+        content_encoding = content_encoding_wrapper.content_encoding
+        print('content_encoding', content_encoding)
+        if content_encoding == '':
+            return body_content.write(buffer)
+    return body_function
 
 content_type_re = re.compile("(?P<content_type>.*?); (?:charset=(?P<charset>.*))")
 
@@ -219,15 +237,17 @@ class PyCyrlConnectionClass(Connection):
         full_url = self.host + url
         curl_handle = self._get_curl_handler()
         curl_handle.setopt(pycurl.URL, full_url)
-        # A buffer to store the content
-        buffer = BytesIO()
-        curl_handle.setopt(pycurl.WRITEDATA, buffer)
 
         if method == 'HEAD':
             curl_handle.setopt(pycurl.NOBODY, True)
 
         headers = {}
         curl_handle.setopt(pycurl.HEADERFUNCTION, get_header_function(headers))
+
+        # Prepare the body callback
+        buffer = BytesIO()
+        #curl_handle.setopt(pycurl.WRITEDATA, buffer)
+        curl_handle.setopt(pycurl.WRITEFUNCTION, get_body_function(headers, buffer))
 
         # The possible body of a request
         if body is not None:
