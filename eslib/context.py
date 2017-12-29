@@ -13,7 +13,7 @@ class ConfigurationError(Exception):
 
 class Context(object):
     # The api settings that store boolean values
-    api_booleans = frozenset(['debug', 'insecure', 'kerberos'])
+    api_booleans = frozenset(['debug', 'insecure', 'kerberos', 'sniff'])
 
     # default values
     api_connect_settings = {
@@ -118,13 +118,19 @@ class Context(object):
                 'sniff_on_connection_fail': True,
                 'sniffer_timeout': 60
             })
+        else:
+            cnxprops.update({
+                'sniff_on_start': False
+            })
+
         if self.api_connect_settings['user_agent'] is not None:
             cnxprops.update({
                 'user_agent': self.api_connect_settings['user_agent'],
             })
 
         self.escnx = Elasticsearch(self.api_connect_settings['url'],
-                                   connection_class=PyCyrlConnectionClass,
+                                   transport_class=AsyncTransport,
+                                   connection_class=PyCyrlConnection,
                                    verify_certs=self.api_connect_settings['verify_certs'],
                                    ca_certs=self.api_connect_settings['ca_file'],
                                    kerberos=self.api_connect_settings['kerberos'],
