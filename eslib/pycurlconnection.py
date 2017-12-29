@@ -103,7 +103,8 @@ def get_curl_debug(debug_filter, logger):
                 print("%s%s" % (prefix, line), file=logger)
     return _curl_debug
 
-class PyCyrlConnectionClass(Connection):
+
+class PyCyrlConnection(Connection):
     """
      Default connection class using the `urllib3` library and the http protocol.
 
