@@ -7,6 +7,8 @@ import sys
 from enum import IntEnum
 import time
 from logging import Logger
+import queue
+
 
 def get_header_function(headers):
     def header_function(header_line):
@@ -104,6 +106,107 @@ def get_curl_debug(debug_filter, logger):
     return _curl_debug
 
 
+class PyCyrlMuliHander(object):
+
+    def __init__(self, max_query=10):
+        self.multi = pycurl.CurlMulti()
+        self.share = pycurl.CurlShare()
+
+        self.share.setopt(pycurl.SH_SHARE, pycurl.LOCK_DATA_COOKIE)
+        self.share.setopt(pycurl.SH_SHARE, pycurl.LOCK_DATA_COOKIE)
+        self.share.setopt(pycurl.SH_SHARE, pycurl.LOCK_DATA_DNS)
+        self.share.setopt(pycurl.SH_SHARE, pycurl.LOCK_DATA_SSL_SESSION)
+
+        self.handles = set()
+        self.waiting_handles = queue.Queue(1000)
+
+        self.max_query = max_query
+
+    def query(self, handle, callback, headers, buffer):
+        handle.cb = callback
+        def manage_callback():
+            status = handle.getinfo(pycurl.RESPONSE_CODE)
+
+            handle.close()
+
+            (content_type, body) = decode_body(handle, headers, buffer)
+
+            #if not (200 <= status < 300) and status not in ignore:
+            #    self.log_request_fail(method, url, buffer.getvalue(), duration, status, body)
+            #    self._raise_error(status, body, content_type)
+
+            #self.log_request_success(method, full_url, url, buffer.getvalue(), status,
+            #                         body, duration)
+            callback(status, headers, body)
+
+        handle.cb = manage_callback
+
+        if self.handles < self.max_query:
+            self.handles.add(handle)
+            self.multi.add_handle(handle)
+        else:
+            self.waiting_handles.put(handle)
+
+    def close(self):
+        self.multi.close()
+        self.share.close()
+
+    def _perform_loop(self):
+        # I don't understand this code, but pycurl says it works this way
+        # so I keep it
+        while True:
+            self._try_load_queries()
+            ret, num_handles = self.multi.perform()
+            if ret != pycurl.E_CALL_MULTI_PERFORM: break
+        return ret, num_handles
+
+    def _try_load_queries(self):
+        """
+        Take as much as possible for the waiting handles queue, but don't send
+        too much of them
+        :return: None
+        """
+        while len(self.handles) < self.max_query and self.waiting_handles.qsize() > 0:
+            try:
+                handler = self.waiting_handles.get(block=False)
+                # needed to keep reference count
+                self.handles.add(handler)
+                self.multi.add_handle(handler)
+            except queue.Empty:
+                break
+
+    def perform(self, timeout=1.0):
+        """
+        Loop on waiting handles to process them until they are no more waiting one and all send are finished
+        :param timeout: the timeout for the loop
+        :return: Nothing
+        """
+        while True:
+            ret, num_handles = self._perform_loop()
+            if self.multi.select(timeout) != -1:
+                # some handles to process
+                (waiting, succed, failed) = self.multi.info_read()
+                for handle in succed:
+                    self.handles.remove(handle)
+                    status = handle.getinfo(pycurl.RESPONSE_CODE)
+                    if status >= 200 and status < 300:
+                        handle.cb()
+                    elif status >= 300:
+                        content_type, decoded = decode_body(handle, handle.headers, handle.buffer)
+                        if content_type == 'application/json' and 'error' in decoded:
+                            message = decoded['error']
+                        else:
+                            message = decoded
+                        print("http failed %s: %d\n    %s" % (handle.getinfo(pycurl.EFFECTIVE_URL), status, message), file=sys.stderr)
+                for handle, code, message in failed:
+                    self.handles.remove(handle)
+                    print("pycurl failed %s: %d" % (handle.getinfo(pycurl.EFFECTIVE_URL), code), file=sys.stderr)
+            # Nothing is waiting any more or is processed, finished
+            if num_handles == 0 and len(self.handles) == 0 and self.waiting_handles.qsize() == 0:
+                break
+
+multi_handle = PyCyrlMuliHander()
+
 class PyCyrlConnection(Connection):
     """
      Default connection class using the `urllib3` library and the http protocol.
@@ -123,9 +226,6 @@ class PyCyrlConnection(Connection):
      :arg debug_filter: sum of curl filters, for debuging
      :arg logger: debug output, can be a file or a logging.Logger
      """
-    _curl = pycurl.CurlMulti()
-    _share = pycurl.CurlShare()
-
     #self, host = 'localhost', port = 9200, use_ssl = False, url_prefix = '', timeout = 10, scheme = 'http',
     #verify_certs = True, ca_certs = None,
     #
@@ -138,7 +238,7 @@ class PyCyrlConnection(Connection):
                  use_ssl=False, verify_certs=False, ca_certs=None,
                  debug=False, debug_filter=CurlDebugType.HEADER + CurlDebugType.DATA, logger=sys.stderr,
                  **kwargs):
-        super(PyCyrlConnectionClass, self).__init__(use_ssl=use_ssl, **kwargs)
+        super(PyCyrlConnection, self).__init__(use_ssl=use_ssl, **kwargs)
 
         if use_ssl:
             self.use_ssl = True
@@ -159,12 +259,16 @@ class PyCyrlConnection(Connection):
 
         settings = {
             pycurl.USERAGENT: self.user_agent,
-            # pycurl.ACCEPT_ENCODING: "",
-            pycurl.NOSIGNAL: True,
+            pycurl.ACCEPT_ENCODING: "",
+            #pycurl.NOSIGNAL: True,
+            # We manage ourself our buffer, Help from Nagle is not needed
+            pycurl.TCP_NODELAY: 1,
+            # ES connections are long, keep them alive to be firewall-friendly
+            pycurl.TCP_KEEPALIVE: 1,
             # Don't keep persistent data
             pycurl.COOKIEFILE: '/dev/null',
             pycurl.COOKIEJAR: '/dev/null',
-            pycurl.SHARE: PyCyrlConnectionClass._share,
+            pycurl.SHARE: multi_handle.share,
 
             # Follow redirect but not too much, it's needed for CAS
             pycurl.FOLLOWLOCATION: True,
@@ -207,14 +311,17 @@ class PyCyrlConnection(Connection):
         header_lines = [
             'Accept: application/json',
             'Connection: keep-alive',
+            # ES is not found of Expect
+            'Expect:',
         ]
         handle.setopt(pycurl.HTTPHEADER, header_lines)
 
         return handle
 
-    def perform_request(self, method, url, params=None, body=None, timeout=None, ignore=()):
+    def perform_request(self, method, url, params=None, body=None, timeout=None, headers={}, ignore=(), callback=None):
+        print(method, url, params, body, timeout, headers, ignore, callback)
         url = self.url_prefix + url
-        if params:
+        if params is not None:
             url = '%s?%s' % (url, urlencode(params))
         full_url = self.host + url
         curl_handle = self._get_curl_handler()
@@ -223,13 +330,13 @@ class PyCyrlConnection(Connection):
         if method == 'HEAD':
             curl_handle.setopt(pycurl.NOBODY, True)
 
+        # Prepare the headers callback
         headers = {}
         curl_handle.setopt(pycurl.HEADERFUNCTION, get_header_function(headers))
 
-        # Prepare the body callback
+        # Prepare the body buffer
         buffer = BytesIO()
-        #curl_handle.setopt(pycurl.WRITEDATA, buffer)
-        curl_handle.setopt(pycurl.WRITEFUNCTION, get_body_function(headers, buffer))
+        curl_handle.setopt(pycurl.WRITEDATA, buffer)
 
         # The possible body of a request
         if body is not None:
@@ -237,27 +344,28 @@ class PyCyrlConnection(Connection):
         # Set after pycurl.POSTFIELDS to ensure that the request is the wanted one
         curl_handle.setopt(pycurl.CUSTOMREQUEST, method)
 
-        start = time.time()
-        curl_handle.perform()
-        duration = time.time() - start
-        status = curl_handle.getinfo(pycurl.RESPONSE_CODE)
-        curl_handle.close()
+        if callback is not None:
+            curl_handle.connection = self
+            multi_handle.query(curl_handle, callback, buffer, headers)
+        else:
+            start = time.time()
+            curl_handle.perform()
+            duration = time.time() - start
 
-        (content_type, body) = decode_body(curl_handle, headers, buffer)
+            status = curl_handle.getinfo(pycurl.RESPONSE_CODE)
+            curl_handle.close()
 
-        if not (200 <= status < 300) and status not in ignore:
-            self.log_request_fail(method, url, buffer.getvalue(), duration, status, body)
-            self._raise_error(status, body)
+            (content_type, body) = decode_body(curl_handle, headers, buffer)
 
-        self.log_request_success(method, full_url, url, buffer.getvalue(), status,
-                                 body, duration)
+            if not (200 <= status < 300) and status not in ignore:
+                self.log_request_fail(method, url, buffer.getvalue(), duration, status, body)
+                self._raise_error(status, body, content_type)
 
-        return status, headers, body
+            self.log_request_success(method, full_url, url, buffer.getvalue(), status,
+                                     body, duration)
+
+            return status, headers, body
 
     def close(self):
         pass
 
-PyCyrlConnectionClass._share.setopt(pycurl.SH_SHARE, pycurl.LOCK_DATA_COOKIE)
-PyCyrlConnectionClass._share.setopt(pycurl.SH_SHARE, pycurl.LOCK_DATA_COOKIE)
-PyCyrlConnectionClass._share.setopt(pycurl.SH_SHARE, pycurl.LOCK_DATA_DNS)
-PyCyrlConnectionClass._share.setopt(pycurl.SH_SHARE, pycurl.LOCK_DATA_SSL_SESSION)
