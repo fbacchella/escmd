@@ -15,33 +15,49 @@ def safe_print(string):
     decoded = codecs.decode(encoded, sys.stdout.encoding, 'replace')
     print(decoded)
 
-def print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
-    (cmd, executed) = dispatcher.run_phrase(verb, object_options, object_args)
-    if cmd is None:
-        print("invalid phrase '%s %s'" % (dispatcher.object_name, verb))
-        return 255
-    if isinstance(executed, collections.Iterable) and not isinstance(executed, (str, bytes, dict)):
+def print_result(verb, cmd, result):
+    if isinstance(result, collections.Iterable) and not isinstance(result, (str, bytes, dict)):
         # If execute return a generator, iterate other it
-        for s in executed:
+        for s in result:
             if s != None:
                 string = cmd.to_str(s)
                 if string:
                     safe_print(string)
                     sys.stdout.flush()
         return cmd.status()
-    elif executed is not None and executed is not False:
+    elif result is not None and result is not False:
         # Else if it return something, just print it
-        string = cmd.to_str(executed)
+        string = cmd.to_str(result)
         if string:
             safe_print(string)
         return cmd.status()
-    elif executed is not None:
+    elif result is not None:
         # It return false, something went wrong
-        print("'%s %s' failed" % (dispatcher.object_name, verb))
+        print("'%s %s' failed" % (result.object_name, verb))
         return cmd.status()
     else:
         # It returned nothing, it should be OK.
         return 0
+
+
+def async_print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
+    (cmd, gen_func, callback) = dispatcher.run_phrase(verb, object_options, object_args)
+    while callable(gen_func):
+        generator,future = gen_func(callback if callback is not None else lambda x: (None, None))
+        try:
+            (connection, method, url, params, body, headers, ignore, timeout) = next(generator)
+            while True:
+                future_perform = lambda: connection.perform_request(method, url, params, body, headers=headers, ignore=ignore, timeout=timeout)
+                (connection, method, url, params, body, headers, ignore, timeout) = generator.send(future_perform)
+        except StopIteration:
+            pass
+        a = future.result()
+        gen_func, callback = future.result()
+    return cmd.status()
+
+def print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
+    (cmd, executed) = dispatcher.run_phrase(verb, object_options, object_args)
+    return print_result(verb, cmd, executed)
 
 
 # needed because dict.update is using shortcuts and don't works on subclass of dict
@@ -107,10 +123,9 @@ def main():
                         del object_options[k]
 
                 # run the found command and print the result
-                status = print_run_phrase(dispatcher, verb, object_options, object_args)
+                status = async_print_run_phrase(dispatcher, verb, object_options, object_args)
                 sys.exit(status)
             except (eslib.ESLibError) as e:
-                print(e)
                 print("The action \"%s %s\" failed with \n    %s" % (dispatcher.object_name, verb, e.error_message))
                 return 251
             finally:

@@ -1,6 +1,7 @@
 from configparser import ConfigParser
 from elasticsearch import Elasticsearch
 from eslib.pycurlconnection import PyCyrlConnection, CurlDebugType
+from eslib.asynctransport import AsyncTransport
 
 class ConfigurationError(Exception):
     def __init__(self, value):

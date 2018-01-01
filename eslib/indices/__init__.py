@@ -1,9 +1,9 @@
 import eslib.verb
 from elasticsearch.exceptions import RequestError
 from eslib.dispatcher import dispatcher, command, Dispatcher
-from eslib.esconnection import decode_body
-import re
 
+import re
+import json
 
 @dispatcher(object_name="index")
 class IndiciesDispatcher(Dispatcher):
@@ -11,7 +11,7 @@ class IndiciesDispatcher(Dispatcher):
     def fill_parser(self, parser):
         parser.add_option("-n", "--name", dest="name", help="index filter")
 
-    def get(self, name):
+    def get(self, name=None):
         return name
 
 
@@ -19,7 +19,20 @@ class IndiciesDispatcher(Dispatcher):
 class IndiciesList(eslib.verb.List):
 
     def execute(self, *args, **kwargs):
-        return self.api.escnx.cat.indices()
+        return self.api.escnx.cat.indices(), self.next
+
+    def next(self, value):
+        for i in value:
+            yield i,None
+
+    def to_str(self, value):
+        if isinstance(value, dict):
+            if value.get('acknowledged', False):
+                return 'acknowledged'
+            else:
+                return json.dumps(value)
+        else:
+            return str(value)
 
 
 @command(IndiciesDispatcher, verb='forcemerge')
@@ -29,7 +42,13 @@ class IndiciesForceMerge(eslib.verb.Verb):
         parser.add_option("-m", "--max_num_segments", dest="max_num_segments", help="Max num segmens", default=1)
 
     def execute(self, max_num_segments=1):
-        return self.api.escnx.indices.forcemerge(self.object, max_num_segments=max_num_segments, flush=True)
+        self.max_num_segments = max_num_segments
+        return self.api.escnx.indices.get(index=self.object, filter_path=['*.settings.index.provided_name']), self.next
+
+    def next(self, value):
+        for i in value:
+            index_name = value['index']
+            yield self.api.escnx.indices.forcemerge(index_name, max_num_segments=self.max_num_segments, flush=True), None
 
 
 @command(IndiciesDispatcher, verb='delete')

@@ -64,7 +64,8 @@ class Dispatcher(object):
         cmd.object = self.get(**object_options)
 
         if cmd.validate():
-            return (cmd, cmd.execute(*verb_args, **verb_options))
+            generaror, callback = cmd.execute(*verb_args, **verb_options)
+            return (cmd, generaror, callback)
         else:
             raise ESLibError("validation failed")
 
