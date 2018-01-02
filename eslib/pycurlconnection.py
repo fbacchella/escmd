@@ -130,13 +130,6 @@ class PyCyrlMuliHander(object):
             handle.close()
 
             (content_type, body) = decode_body(handle, headers, buffer)
-
-            #if not (200 <= status < 300) and status not in ignore:
-            #    self.log_request_fail(method, url, buffer.getvalue(), duration, status, body)
-            #    self._raise_error(status, body, content_type)
-
-            #self.log_request_success(method, full_url, url, buffer.getvalue(), status,
-            #                         body, duration)
             callback(status, headers, body)
 
         handle.cb = manage_callback
@@ -319,7 +312,6 @@ class PyCyrlConnection(Connection):
         return handle
 
     def perform_request(self, method, url, params=None, body=None, timeout=None, headers={}, ignore=(), callback=None):
-        print(method, url, params, body, timeout, headers, ignore, callback)
         url = self.url_prefix + url
         if params is not None:
             url = '%s?%s' % (url, urlencode(params))

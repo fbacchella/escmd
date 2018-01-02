@@ -6,6 +6,8 @@ import optparse
 import eslib
 import collections
 import codecs
+from asyncio import wait, FIRST_COMPLETED, get_event_loop
+from inspect import isgenerator
 
 from eslib.context import Context, ConfigurationError
 
@@ -16,7 +18,7 @@ def safe_print(string):
     print(decoded)
 
 def print_result(verb, cmd, result):
-    if isinstance(result, collections.Iterable) and not isinstance(result, (str, bytes, dict)):
+    if not isinstance(result, (str, bytes, dict)) and isinstance(result, collections.Iterable) or isgenerator(result):
         # If execute return a generator, iterate other it
         for s in result:
             if s != None:
@@ -40,20 +42,31 @@ def print_result(verb, cmd, result):
         return 0
 
 
+def schedule(loop, *futures):
+    def coro():
+        done, pending = yield from wait(futures, return_when=FIRST_COMPLETED, loop=loop)
+        return done, pending
+    return loop.run_until_complete(coro())
+
+
 def async_print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
-    (cmd, gen_func, callback) = dispatcher.run_phrase(verb, object_options, object_args)
-    while callable(gen_func):
-        generator,future = gen_func(callback if callback is not None else lambda x: (None, None))
-        try:
-            (connection, method, url, params, body, headers, ignore, timeout) = next(generator)
-            while True:
-                future_perform = lambda: connection.perform_request(method, url, params, body, headers=headers, ignore=ignore, timeout=timeout)
-                (connection, method, url, params, body, headers, ignore, timeout) = generator.send(future_perform)
-        except StopIteration:
-            pass
-        a = future.result()
-        gen_func, callback = future.result()
-    return cmd.status()
+    loop = get_event_loop()
+    (cmd, delayed_async_query_list, callback) = dispatcher.run_phrase(verb, object_options, object_args)
+    for i in delayed_async_query_list:
+        cmd.run_async_query(i, callback)
+    running_futurs = []
+    results = []
+    while True:
+        while len(cmd.waiting_futures) > 0:
+            running_futurs.append(cmd.waiting_futures.pop())
+        done_futurs, running_futurs = schedule(loop, *running_futurs)
+        for f in done_futurs:
+            results.append(f.result())
+        if len(running_futurs) == 0:
+            break
+    for i in results:
+        print_result(verb=verb, cmd=cmd, result=i)
+
 
 def print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
     (cmd, executed) = dispatcher.run_phrase(verb, object_options, object_args)

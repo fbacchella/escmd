@@ -31,7 +31,7 @@ class Dispatcher(object):
     def fill_parser(self, parser):
         pass
 
-    def execute(self, name, method_args=[], method_kwargs={}):
+    def execute(self):
         NameError('Not implemented')
 
     def get(self):
@@ -64,8 +64,8 @@ class Dispatcher(object):
         cmd.object = self.get(**object_options)
 
         if cmd.validate():
-            generaror, callback = cmd.execute(*verb_args, **verb_options)
-            return (cmd, generaror, callback)
+            delayed_async_action_list, callback = cmd.execute(*verb_args, **verb_options)
+            return (cmd, delayed_async_action_list, callback)
         else:
             raise ESLibError("validation failed")
 

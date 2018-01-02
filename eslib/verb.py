@@ -1,6 +1,6 @@
 import optparse
 import json
-
+from asyncio import Future, coroutine, iscoroutine, iscoroutinefunction
 from eslib import ESLibError
 
 # Find the best implementation available on this platform
@@ -16,6 +16,7 @@ class Verb(object):
         self.api = dispatcher.api
         self.dispatcher = object
         self.object = None
+        self.waiting_futures = set()
 
     def fill_parser(self, parser):
         pass
@@ -55,6 +56,32 @@ class Verb(object):
         """A default status command to run on success"""
         return 0;
 
+    def run_async_query(self, delayed_async_query, callback=None):
+        new_future = Future()
+        try_generator = delayed_async_query(new_future)
+        try:
+            (connection, method, url, params, body, headers, ignore, timeout) = next(try_generator)
+            while True:
+                future_perform = lambda: connection.perform_request(method, url, params, body, headers=headers, ignore=ignore, timeout=timeout)
+                (connection, method, url, params, body, headers, ignore, timeout) = try_generator.send(future_perform)
+        except StopIteration:
+            pass
+
+        @coroutine
+        def wrapping_coroutine():
+            result = yield from new_future
+            return result
+
+        if callback is not None:
+            def forward(same_future):
+                data = same_future.result()
+                next_delayed_async_query_list, next_callback = callback(data)
+                if next_delayed_async_query_list is not None:
+                    for i in next_delayed_async_query_list:
+                        if callable(i):
+                            self.run_async_query(i, next_callback)
+            new_future.add_done_callback(forward)
+        self.waiting_futures.add(wrapping_coroutine())
 
 class RepeterVerb(Verb):
 
