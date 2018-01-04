@@ -1,7 +1,8 @@
 import optparse
 import json
-from asyncio import Future, coroutine, iscoroutine, iscoroutinefunction
-from eslib import ESLibError
+from asyncio import Future
+from elasticsearch.compat import string_types
+from collections import Iterable
 
 # Find the best implementation available on this platform
 try:
@@ -17,6 +18,7 @@ class Verb(object):
         self.dispatcher = object
         self.object = None
         self.waiting_futures = set()
+        self.results_futures = []
 
     def fill_parser(self, parser):
         pass
@@ -56,8 +58,36 @@ class Verb(object):
         """A default status command to run on success"""
         return 0;
 
-    def run_async_query(self, delayed_async_query, callback=None):
+    def forward(self, future, callback):
+        data = future.result()
+        forwarded = False
+        ex = None
+        while callback is not None:
+            try:
+                data, callback = callback(data)
+            except Exception as e:
+                ex = e
+                break
+            for i in data if data is not None and isinstance(data, Iterable) and not isinstance(data, string_types) else (data,):
+                if callable(i):
+                    self.add_async_query(i, callback)
+                    forwarded = True
+            if forwarded:
+                callback = None
+        if not forwarded:
+            result_future = Future()
+            if ex is not None:
+                result_future.set_exception(ex)
+            else:
+                result_future.set_result(data)
+            self.results_futures.append(result_future)
+
+    def add_async_query(self, delayed_async_query, callback):
         new_future = Future()
+        new_future.add_done_callback(lambda x: self.forward(new_future, callback))
+
+        self.waiting_futures.add(new_future)
+
         try_generator = delayed_async_query(new_future)
         try:
             (connection, method, url, params, body, headers, ignore, timeout) = next(try_generator)
@@ -67,21 +97,6 @@ class Verb(object):
         except StopIteration:
             pass
 
-        @coroutine
-        def wrapping_coroutine():
-            result = yield from new_future
-            return result
-
-        if callback is not None:
-            def forward(same_future):
-                data = same_future.result()
-                next_delayed_async_query_list, next_callback = callback(data)
-                if next_delayed_async_query_list is not None:
-                    for i in next_delayed_async_query_list:
-                        if callable(i):
-                            self.run_async_query(i, next_callback)
-            new_future.add_done_callback(forward)
-        self.waiting_futures.add(wrapping_coroutine())
 
 class RepeterVerb(Verb):
 

@@ -53,19 +53,16 @@ def async_print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
     loop = get_event_loop()
     (cmd, delayed_async_query_list, callback) = dispatcher.run_phrase(verb, object_options, object_args)
     for i in delayed_async_query_list:
-        cmd.run_async_query(i, callback)
-    running_futurs = []
-    results = []
+        cmd.add_async_query(i, callback)
+    running_futurs = set()
     while True:
         while len(cmd.waiting_futures) > 0:
-            running_futurs.append(cmd.waiting_futures.pop())
+            running_futurs.add(cmd.waiting_futures.pop())
         done_futurs, running_futurs = schedule(loop, *running_futurs)
-        for f in done_futurs:
-            results.append(f.result())
-        if len(running_futurs) == 0:
+        if len(running_futurs) == 0 and len(cmd.waiting_futures) == 0:
             break
-    for i in results:
-        print_result(verb=verb, cmd=cmd, result=i)
+    for i in cmd.results_futures:
+        print_result(verb=verb, cmd=cmd, result=i.result())
 
 
 def print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
