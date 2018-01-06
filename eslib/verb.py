@@ -10,6 +10,14 @@ try:
 except:
     from io import StringIO
 
+def callback(cb):
+    def decorator(old_method):
+        def new_method(self, *args, **kwargs):
+            returned = old_method(self, *args, **kwargs)
+            return returned, cb.__get__(self)
+        return new_method
+    return decorator
+
 
 class Verb(object):
     """A abstract class, used to implements actual verb"""
@@ -57,6 +65,11 @@ class Verb(object):
     def status(self):
         """A default status command to run on success"""
         return 0;
+
+    def start(self, data, callback):
+        new_future = Future()
+        new_future.set_result(data)
+        return self.forward(new_future, lambda  x: (data, callback))
 
     def forward(self, future, callback):
         data = future.result()

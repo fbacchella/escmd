@@ -1,4 +1,5 @@
 from eslib import ESLibError, dispatchers
+from asyncio import Future
 
 
 def command(dispatcher_class, verb=None):

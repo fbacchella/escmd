@@ -51,14 +51,14 @@ def schedule(loop, *futures):
 
 def async_print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
     loop = get_event_loop()
-    (cmd, delayed_async_query_list, callback) = dispatcher.run_phrase(verb, object_options, object_args)
-    for i in delayed_async_query_list:
-        cmd.add_async_query(i, callback)
     running_futurs = set()
+    (cmd, delayed_async_query_list, callback) = dispatcher.run_phrase(verb, object_options, object_args)
+    cmd.start(delayed_async_query_list, callback)
     while True:
-        while len(cmd.waiting_futures) > 0:
+        while len(cmd.waiting_futures) > 0 and len(running_futurs) < 10:
             running_futurs.add(cmd.waiting_futures.pop())
-        done_futurs, running_futurs = schedule(loop, *running_futurs)
+        if len(running_futurs) > 0:
+            done_futurs, running_futurs = schedule(loop, *running_futurs)
         if len(running_futurs) == 0 and len(cmd.waiting_futures) == 0:
             break
     for i in cmd.results_futures:

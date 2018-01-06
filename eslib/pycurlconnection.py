@@ -122,15 +122,11 @@ class PyCyrlMuliHander(object):
 
         self.max_query = max_query
 
-    def query(self, handle, callback, headers, buffer):
-        handle.cb = callback
+    def query(self, handle, future, headers, buffer):
         def manage_callback():
-            status = handle.getinfo(pycurl.RESPONSE_CODE)
-
             handle.close()
-
             (content_type, body) = decode_body(handle, headers, buffer)
-            callback(status, headers, body)
+            future.set_result((content_type, body))
 
         handle.cb = manage_callback
 
@@ -311,7 +307,7 @@ class PyCyrlConnection(Connection):
 
         return handle
 
-    def perform_request(self, method, url, params=None, body=None, timeout=None, headers={}, ignore=(), callback=None):
+    def perform_request(self, method, url, params=None, body=None, timeout=None, headers={}, ignore=(), future=None):
         url = self.url_prefix + url
         if params is not None:
             url = '%s?%s' % (url, urlencode(params))
@@ -336,9 +332,9 @@ class PyCyrlConnection(Connection):
         # Set after pycurl.POSTFIELDS to ensure that the request is the wanted one
         curl_handle.setopt(pycurl.CUSTOMREQUEST, method)
 
-        if callback is not None:
+        if future is not None:
             curl_handle.connection = self
-            multi_handle.query(curl_handle, callback, buffer, headers)
+            multi_handle.query(curl_handle, future, buffer, headers)
         else:
             start = time.time()
             curl_handle.perform()
