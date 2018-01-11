@@ -1,4 +1,4 @@
-from elasticsearch import Connection
+from elasticsearch import Connection, ConnectionError
 import pycurl
 from io import BytesIO
 from elasticsearch.compat import urlencode
@@ -10,10 +10,18 @@ from logging import Logger
 import queue
 
 
+status_line_re = re.compile(r'HTTP\/\S+\s+\d+\s+(.*?)$')
+
 def get_header_function(headers):
+
     def header_function(header_line):
         # HTTP standard specifies that headers are encoded in iso-8859-1.
         header_line = header_line.decode('iso-8859-1')
+
+        #Catch the status line
+        if not '__STATUS__' in headers:
+            m = status_line_re.findall(header_line.strip())
+            headers['__STATUS__'] = m[0]
 
         # Header lines include the first status line (HTTP/1.x ...).
         # We are going to ignore all lines that don't have a colon in them.
@@ -40,11 +48,11 @@ def get_header_function(headers):
 
 content_type_re = re.compile("(?P<content_type>.*?); (?:charset=(?P<charset>.*))")
 
-def decode_body(handler, headers, body):
+def decode_body(handler):
     encoding = 'UTF-8'
     content_type = None
-    if 'content-type' in headers:
-        content_type_header = headers['content-type']
+    if 'content-type' in handler.headers:
+        content_type_header = handler.headers['content-type']
     else:
         try:
             content_type_header = handler.get_info(pycurl.CONTENT_TYPE)
@@ -56,7 +64,7 @@ def decode_body(handler, headers, body):
             encoding = result.group('charset')
             content_type = result.group('content_type')
 
-    body = body.getvalue().decode(encoding)
+    body = handler.buffer.getvalue().decode(encoding)
     return (content_type, body)
 
 
@@ -122,15 +130,20 @@ class PyCyrlMuliHander(object):
 
         self.max_query = max_query
 
-    def query(self, handle, future, headers, buffer):
+    def query(self, handle, future):
         def manage_callback():
             handle.close()
-            (content_type, body) = decode_body(handle, headers, buffer)
+            (content_type, body) = decode_body(handle)
             future.set_result((content_type, body))
 
-        handle.cb = manage_callback
+        def failed_callback(ex):
+            handle.close()
+            future.set_exception(ex)
 
-        if self.handles < self.max_query:
+        handle.cb = manage_callback
+        handle.f_cb = failed_callback
+
+        if len(self.handles) < self.max_query:
             self.handles.add(handle)
             self.multi.add_handle(handle)
         else:
@@ -179,20 +192,22 @@ class PyCyrlMuliHander(object):
                     self.handles.remove(handle)
                     status = handle.getinfo(pycurl.RESPONSE_CODE)
                     if status >= 200 and status < 300:
-                        handle.cb()
+                        yield handle.cb()
                     elif status >= 300:
-                        content_type, decoded = decode_body(handle, handle.headers, handle.buffer)
+
+                        content_type, decoded = decode_body(handle)
                         if content_type == 'application/json' and 'error' in decoded:
                             message = decoded['error']
                         else:
-                            message = decoded
-                        print("http failed %s: %d\n    %s" % (handle.getinfo(pycurl.EFFECTIVE_URL), status, message), file=sys.stderr)
+                            message = handle.headers.pop('__STATUS__')
+                        handle.f_cb(ConnectionError("http failed %s: %d\n    %s" % (handle.getinfo(pycurl.EFFECTIVE_URL), status, message), status, message))
                 for handle, code, message in failed:
                     self.handles.remove(handle)
-                    print("pycurl failed %s: %d" % (handle.getinfo(pycurl.EFFECTIVE_URL), code), file=sys.stderr)
+                    handle.f_cb(ConnectionError("pycurl failed %s: %d" % (handle.getinfo(pycurl.EFFECTIVE_URL), code), code * -1, message))
             # Nothing is waiting any more or is processed, finished
             if num_handles == 0 and len(self.handles) == 0 and self.waiting_handles.qsize() == 0:
                 break
+
 
 multi_handle = PyCyrlMuliHander()
 
@@ -243,7 +258,7 @@ class PyCyrlConnection(Connection):
         else:
             self.debug = False
 
-    def _get_curl_handler(self):
+    def _get_curl_handler(self, headers):
         handle = pycurl.Curl()
 
         settings = {
@@ -297,12 +312,13 @@ class PyCyrlConnection(Connection):
                 print(e, key, value)
 
         # Prepare headers:
-        header_lines = [
-            'Accept: application/json',
-            'Connection: keep-alive',
-            # ES is not found of Expect
-            'Expect:',
-        ]
+        default_headers = {
+            'Accept': 'application/json',
+            'Connection': 'Keep-Alive',
+            'Expect': '',
+        }
+        default_headers.update(headers)
+        header_lines = ["%s: %s" % (k, v) for (k, v) in default_headers.items()]
         handle.setopt(pycurl.HTTPHEADER, header_lines)
 
         return handle
@@ -312,19 +328,19 @@ class PyCyrlConnection(Connection):
         if params is not None:
             url = '%s?%s' % (url, urlencode(params))
         full_url = self.host + url
-        curl_handle = self._get_curl_handler()
+        curl_handle = self._get_curl_handler(headers)
         curl_handle.setopt(pycurl.URL, full_url)
 
         if method == 'HEAD':
             curl_handle.setopt(pycurl.NOBODY, True)
 
         # Prepare the headers callback
-        headers = {}
-        curl_handle.setopt(pycurl.HEADERFUNCTION, get_header_function(headers))
+        curl_handle.headers = {}
+        curl_handle.setopt(pycurl.HEADERFUNCTION, get_header_function(curl_handle.headers))
 
         # Prepare the body buffer
-        buffer = BytesIO()
-        curl_handle.setopt(pycurl.WRITEDATA, buffer)
+        curl_handle.buffer = BytesIO()
+        curl_handle.setopt(pycurl.WRITEDATA, curl_handle.buffer)
 
         # The possible body of a request
         if body is not None:
@@ -334,7 +350,7 @@ class PyCyrlConnection(Connection):
 
         if future is not None:
             curl_handle.connection = self
-            multi_handle.query(curl_handle, future, buffer, headers)
+            multi_handle.query(curl_handle, future)
         else:
             start = time.time()
             curl_handle.perform()
@@ -343,16 +359,16 @@ class PyCyrlConnection(Connection):
             status = curl_handle.getinfo(pycurl.RESPONSE_CODE)
             curl_handle.close()
 
-            (content_type, body) = decode_body(curl_handle, headers, buffer)
+            (content_type, body) = decode_body(curl_handle)
 
             if not (200 <= status < 300) and status not in ignore:
-                self.log_request_fail(method, url, buffer.getvalue(), duration, status, body)
+                self.log_request_fail(method, url, curl_handle.buffer.getvalue(), duration, status, body)
                 self._raise_error(status, body, content_type)
 
-            self.log_request_success(method, full_url, url, buffer.getvalue(), status,
+            self.log_request_success(method, full_url, url, curl_handle.buffer.getvalue(), status,
                                      body, duration)
 
-            return status, headers, body
+            return status, curl_handle.header, body
 
     def close(self):
         pass
