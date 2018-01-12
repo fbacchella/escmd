@@ -8,6 +8,7 @@ import collections
 import codecs
 from asyncio import wait, FIRST_COMPLETED, get_event_loop
 from inspect import isgenerator
+from eslib.pycurlconnection import multi_handle
 
 from eslib.context import Context, ConfigurationError
 
@@ -58,7 +59,7 @@ def async_print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
         while len(cmd.waiting_futures) > 0 and len(running_futurs) < 10:
             running_futurs.add(cmd.waiting_futures.pop())
         if len(running_futurs) > 0:
-            done_futurs, running_futurs = schedule(loop, *running_futurs)
+            done_futurs, running_futurs = schedule(loop, multi_handle.perform(), *running_futurs)
         if len(running_futurs) == 0 and len(cmd.waiting_futures) == 0:
             break
     for i in cmd.results_futures:

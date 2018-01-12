@@ -63,7 +63,6 @@ def decode_body(handler):
         if result is not None:
             encoding = result.group('charset')
             content_type = result.group('content_type')
-
     body = handler.buffer.getvalue().decode(encoding)
     return (content_type, body)
 
@@ -131,10 +130,9 @@ class PyCyrlMuliHander(object):
         self.max_query = max_query
 
     def query(self, handle, future):
-        def manage_callback():
+        def manage_callback(status, headers, data):
             handle.close()
-            (content_type, body) = decode_body(handle)
-            future.set_result((content_type, body))
+            future.set_result((status, headers, data))
 
         def failed_callback(ex):
             handle.close()
@@ -191,15 +189,11 @@ class PyCyrlMuliHander(object):
                 for handle in succed:
                     self.handles.remove(handle)
                     status = handle.getinfo(pycurl.RESPONSE_CODE)
+                    content_type, decoded = decode_body(handle)
                     if status >= 200 and status < 300:
-                        yield handle.cb()
+                        yield handle.cb(status, handle.headers, decoded)
                     elif status >= 300:
-
-                        content_type, decoded = decode_body(handle)
-                        if content_type == 'application/json' and 'error' in decoded:
-                            message = decoded['error']
-                        else:
-                            message = handle.headers.pop('__STATUS__')
+                        message = handle.headers.pop('__STATUS__')
                         handle.f_cb(ConnectionError("http failed %s: %d\n    %s" % (handle.getinfo(pycurl.EFFECTIVE_URL), status, message), status, message))
                 for handle, code, message in failed:
                     self.handles.remove(handle)
@@ -315,9 +309,11 @@ class PyCyrlConnection(Connection):
         default_headers = {
             'Accept': 'application/json',
             'Connection': 'Keep-Alive',
+            'Content-Type': 'application/json',
             'Expect': '',
         }
-        default_headers.update(headers)
+        if headers is not None:
+            default_headers.update(headers)
         header_lines = ["%s: %s" % (k, v) for (k, v) in default_headers.items()]
         handle.setopt(pycurl.HTTPHEADER, header_lines)
 
