@@ -13,10 +13,10 @@ class Scheduler(object):
     def schedule(self, task):
         if isinstance(task, QueryIterator):
             self.waiting_tasks.add(iter(task))
+        else:
+            self.waiting_tasks.add(task)
 
     def execute(self, *futures):
-        print(futures)
-
         def coro():
             done, pending = yield from wait(futures, return_when=FIRST_COMPLETED, loop=self.loop)
             return done, pending

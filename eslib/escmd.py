@@ -6,9 +6,8 @@ import optparse
 import eslib
 import collections
 import codecs
-from asyncio import wait, FIRST_COMPLETED, get_event_loop
 from inspect import isgenerator
-from eslib.pycurlconnection import multi_handle
+from eslib.scheduler import Scheduler
 
 from eslib.context import Context, ConfigurationError
 
@@ -43,27 +42,13 @@ def print_result(verb, cmd, result):
         return 0
 
 
-def schedule(loop, *futures):
-    def coro():
-        done, pending = yield from wait(futures, return_when=FIRST_COMPLETED, loop=loop)
-        return done, pending
-    return loop.run_until_complete(coro())
-
-
 def async_print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
-    loop = get_event_loop()
-    running_futurs = set()
+    scheduler = Scheduler()
     (cmd, delayed_async_query_list, callback) = dispatcher.run_phrase(verb, object_options, object_args)
-    cmd.start(delayed_async_query_list, callback)
-    while True:
-        while len(cmd.waiting_futures) > 0 and len(running_futurs) < 10:
-            running_futurs.add(cmd.waiting_futures.pop())
-        if len(running_futurs) > 0:
-            done_futurs, running_futurs = schedule(loop, multi_handle.perform(), *running_futurs)
-        if len(running_futurs) == 0 and len(cmd.waiting_futures) == 0:
-            break
-    for i in cmd.results_futures:
-        print_result(verb=verb, cmd=cmd, result=i.result())
+    cmd.start(scheduler, delayed_async_query_list, callback)
+    scheduler.schedule(delayed_async_query_list)
+
+    scheduler.run()
 
 
 def print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):

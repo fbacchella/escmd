@@ -3,12 +3,14 @@ import json
 from asyncio import Future
 from elasticsearch.compat import string_types
 from collections import Iterable
+from eslib.asynctransport import QueryIterator
 
 # Find the best implementation available on this platform
 try:
     from io import StringIO
 except:
     from io import StringIO
+
 
 def callback(cb):
     def decorator(old_method):
@@ -66,10 +68,9 @@ class Verb(object):
         """A default status command to run on success"""
         return 0;
 
-    def start(self, data, callback):
-        new_future = Future()
-        new_future.set_result(data)
-        return self.forward(new_future, lambda  x: (data, callback))
+    def start(self, scheduler, data, callback):
+        self.scheduler = scheduler
+        self.add_async_query(data, callback)
 
     def forward(self, future, callback):
         data = future.result()
@@ -81,10 +82,12 @@ class Verb(object):
             except Exception as e:
                 ex = e
                 break
-            for i in data if data is not None and isinstance(data, Iterable) and not isinstance(data, string_types) else (data,):
-                if callable(i):
+            for i in data if data is not None and not isinstance(data, QueryIterator) and isinstance(data, Iterable) and not isinstance(data, string_types) else (data,):
+                if isinstance(i, QueryIterator):
                     self.add_async_query(i, callback)
                     forwarded = True
+                else:
+                    pass
             if forwarded:
                 callback = None
         if not forwarded:
@@ -96,19 +99,8 @@ class Verb(object):
             self.results_futures.append(result_future)
 
     def add_async_query(self, delayed_async_query, callback):
-        new_future = Future()
-        new_future.add_done_callback(lambda x: self.forward(new_future, callback))
-
-        self.waiting_futures.add(new_future)
-
-        try_generator = delayed_async_query(new_future)
-        try:
-            (connection, method, url, params, body, headers, ignore, timeout) = next(try_generator)
-            while True:
-                future_perform = lambda: connection.perform_request(method, url, params, body, headers=headers, ignore=ignore, timeout=timeout)
-                (connection, method, url, params, body, headers, ignore, timeout) = try_generator.send(future_perform)
-        except StopIteration:
-            pass
+        delayed_async_query.futur_result.add_done_callback(lambda x: self.forward(x, callback))
+        self.scheduler.schedule(delayed_async_query)
 
 
 class RepeterVerb(Verb):
