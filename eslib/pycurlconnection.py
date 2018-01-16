@@ -364,7 +364,7 @@ class PyCyrlConnection(Connection):
             self.log_request_success(method, full_url, url, curl_handle.buffer.getvalue(), status,
                                      body, duration)
 
-            return status, curl_handle.header, body
+            return status, curl_handle.headers, body
 
     def close(self):
         pass
