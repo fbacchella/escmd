@@ -7,7 +7,7 @@ import sys
 from enum import IntEnum
 import time
 from logging import Logger
-import queue
+from asyncio import Queue, QueueEmpty, get_event_loop, wait_for, TimeoutError
 
 
 status_line_re = re.compile(r'HTTP\/\S+\s+\d+\s+(.*?)$')
@@ -116,6 +116,7 @@ def get_curl_debug(debug_filter, logger):
 class PyCyrlMuliHander(object):
 
     def __init__(self, max_query=10):
+        self.loop = get_event_loop()
         self.multi = pycurl.CurlMulti()
         self.share = pycurl.CurlShare()
 
@@ -125,9 +126,8 @@ class PyCyrlMuliHander(object):
         self.share.setopt(pycurl.SH_SHARE, pycurl.LOCK_DATA_SSL_SESSION)
 
         self.handles = set()
-        self.waiting_handles = queue.Queue(1000)
-
-        self.max_query = max_query
+        self.waiting_handles = Queue()
+        self.running = True
 
     def query(self, handle, future):
         def manage_callback(status, headers, data):
@@ -141,66 +141,85 @@ class PyCyrlMuliHander(object):
         handle.cb = manage_callback
         handle.f_cb = failed_callback
 
-        if len(self.handles) < self.max_query:
-            self.handles.add(handle)
-            self.multi.add_handle(handle)
-        else:
-            self.waiting_handles.put(handle)
+        # put the query in the waiting queue, that launch it if possible
+        yield from self.waiting_handles.put(handle)
+        yield from future
+        # the future that will hold the  result
+        return future.result()
 
     def close(self):
         self.multi.close()
         self.share.close()
 
     def _perform_loop(self):
-        # I don't understand this code, but pycurl says it works this way
-        # so I keep it
-        while True:
-            self._try_load_queries()
+        ret, num_handles = self.multi.perform()
+        # libcurl < 6.20 needed this loop (see https://curl.haxx.se/libcurl/c/libcurl-errors.html#CURLMCALLMULTIPERFORM)
+        while ret == pycurl.E_CALL_MULTI_PERFORM:
             ret, num_handles = self.multi.perform()
-            if ret != pycurl.E_CALL_MULTI_PERFORM: break
         return ret, num_handles
 
-    def _try_load_queries(self):
-        """
-        Take as much as possible for the waiting handles queue, but don't send
-        too much of them
-        :return: None
-        """
-        while len(self.handles) < self.max_query and self.waiting_handles.qsize() > 0:
+    def _try_load_queries(self, wait=True, timeout=1.0):
+        added = 0
+        while True:
             try:
-                handler = self.waiting_handles.get(block=False)
+                if wait:
+                    handler = yield from wait_for(self.waiting_handles.get(), timeout)
+                else:
+                    handler = self.waiting_handles.get_nowait()
+                # only wait once
+                wait = False
                 # needed to keep reference count
                 self.handles.add(handler)
                 self.multi.add_handle(handler)
-            except queue.Empty:
+                added += 1
+            except QueueEmpty:
+                break
+            except TimeoutError:
                 break
 
-    def perform(self, timeout=1.0):
+        if added > 0:
+            ret, num_handles = self._perform_loop()
+            if ret > 0:
+                raise ConnectionError("pycurl failed", ret)
+
+
+    def perform(self, timeout=0.1):
         """
         Loop on waiting handles to process them until they are no more waiting one and all send are finished
         :param timeout: the timeout for the loop
         :return: Nothing
         """
-        while True:
+        while self.running:
+            if len(self.handles) == 0:
+                # no activity, just sleep, for new queries
+                yield from self._try_load_queries(True, timeout)
+            else:
+                yield from self._try_load_queries(False)
+            # wait for something to happen
+            selected = self.multi.select(timeout)
+            if selected < 0:
+                continue
+            # it was not a select time out, something to do
             ret, num_handles = self._perform_loop()
-            if self.multi.select(timeout) != -1:
+            if ret > 0:
+                raise ConnectionError("pycurl failed", ret)
+            if len(self.handles) == 0:
+                continue
+            else:
                 # some handles to process
-                (waiting, succed, failed) = self.multi.info_read()
-                for handle in succed:
+                (waiting, succeded, failed) = self.multi.info_read()
+                for handle in succeded:
                     self.handles.remove(handle)
                     status = handle.getinfo(pycurl.RESPONSE_CODE)
                     content_type, decoded = decode_body(handle)
                     if status >= 200 and status < 300:
-                        yield handle.cb(status, handle.headers, decoded)
+                        handle.cb(status, handle.headers, decoded)
                     elif status >= 300:
                         message = handle.headers.pop('__STATUS__')
                         handle.f_cb(ConnectionError("http failed %s: %d\n    %s" % (handle.getinfo(pycurl.EFFECTIVE_URL), status, message), status, message))
                 for handle, code, message in failed:
                     self.handles.remove(handle)
                     handle.f_cb(ConnectionError("pycurl failed %s: %d" % (handle.getinfo(pycurl.EFFECTIVE_URL), code), code * -1, message))
-            # Nothing is waiting any more or is processed, finished
-            if num_handles == 0 and len(self.handles) == 0 and self.waiting_handles.qsize() == 0:
-                break
 
 
 multi_handle = PyCyrlMuliHander()
@@ -343,10 +362,9 @@ class PyCyrlConnection(Connection):
             curl_handle.setopt(pycurl.POSTFIELDS, body)
         # Set after pycurl.POSTFIELDS to ensure that the request is the wanted one
         curl_handle.setopt(pycurl.CUSTOMREQUEST, method)
-
         if future is not None:
             curl_handle.connection = self
-            multi_handle.query(curl_handle, future)
+            return multi_handle.query(curl_handle, future)
         else:
             start = time.time()
             curl_handle.perform()
