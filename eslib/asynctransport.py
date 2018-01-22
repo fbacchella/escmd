@@ -1,44 +1,38 @@
 from elasticsearch import Transport
-from asyncio import Future, coroutine
+from asyncio import Future
 
-class QueryIterator(object):
-
-    def __init__(self, transport, method, url, headers, params, body):
-        self.futur_result = Future()
-        self.query_iterator = transport.perform_async_request(self.futur_result, method, url, headers, params, body)
-
-    def __iter__(self):
-        (self.connection,
-         self.method,
-         self.url,
-         self.params,
-         self.body,
-         self.headers,
-         self.ignore,
-         self.timeout) = self.query_iterator.send(None)
-
-        @coroutine
-        def generator():
-            curl_future = Future()
-            self.connection.perform_request(self.method, self.url, self.params, self.body, headers=self.headers,
-                                            ignore=self.ignore,
-                                            timeout=self.timeout, future=curl_future)
-            yield from curl_future
-            (self.connection,
-             self.method,
-             self.url,
-             self.params,
-             self.body,
-             self.headers,
-             self.ignore,
-             self.timeout) = self.query_iterator.send(curl_future.result)
-
-        return generator()
-
-    def schedule(self, waiting_list):
-        waiting_list.add(iter(self))
 
 class AsyncTransport(Transport):
 
     def perform_request(self, method, url, headers=None, params=None, body=None):
-        return QueryIterator(self, method, url, headers, params, body)
+        futur_result = Future()
+        query_iterator = self.perform_async_request(futur_result, method, url, headers, params, body)
+        (connection,
+         next_method,
+         next_url,
+         next_params,
+         next_body,
+         next_headers,
+         ignore,
+         timeout) = query_iterator.send(None)
+        while True:
+            curl_future = Future()
+            yield from connection.perform_request(method, next_url, next_params, next_body,
+                                                       headers=next_headers,
+                                                       ignore=ignore,
+                                                       timeout=timeout, future=curl_future)
+            try:
+                (connection,
+                 next_method,
+                 next_url,
+                 next_params,
+                 next_body,
+                 next_headers,
+                 ignore,
+                 timeout) = query_iterator.send(curl_future.result)
+            except StopIteration:
+                break
+
+        return futur_result.result()
+
+

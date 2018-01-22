@@ -195,6 +195,8 @@ class PyCyrlMuliHander(object):
                 yield from self._try_load_queries(True, timeout)
             else:
                 yield from self._try_load_queries(False)
+            if len(self.handles) == 0:
+                continue
             # wait for something to happen
             selected = self.multi.select(timeout)
             if selected < 0:
