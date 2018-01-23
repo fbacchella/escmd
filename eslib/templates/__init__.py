@@ -2,7 +2,7 @@ from eslib.verb import Verb, List
 import json
 from eslib.dispatcher import dispatcher, command, Dispatcher
 from asyncio import coroutine
-import sys
+
 
 @dispatcher(object_name="template")
 class TemplatesDispatcher(Dispatcher):
@@ -41,6 +41,7 @@ class TemplatesDump(TemplateVerb):
 
     def to_str(self, value):
         return value.__str__()
+
 
 @command(TemplatesDispatcher, verb='put')
 class TemplatesPut(TemplateVerb):

@@ -3,6 +3,7 @@ from eslib.dispatcher import dispatcher, command, Dispatcher
 from asyncio import coroutine
 import re
 
+
 @dispatcher(object_name="index")
 class IndiciesDispatcher(Dispatcher):
 
@@ -11,6 +12,7 @@ class IndiciesDispatcher(Dispatcher):
 
     def get(self, name=None):
         return name
+
 
 class IndiciesVerb(Verb):
 
@@ -179,6 +181,7 @@ class IndiciesSettings(IndiciesVerb):
         if len(settings) == 0:
             return False
         print(self.api.escnx.indices.put_settings(body=settings, index=self.object))
+
 
 @command(IndiciesDispatcher, verb='dump')
 class IndiciesDump(IndiciesVerb):
