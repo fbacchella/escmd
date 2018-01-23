@@ -1,7 +1,6 @@
 from eslib.verb import Verb, List
-from elasticsearch.exceptions import RequestError
 from eslib.dispatcher import dispatcher, command, Dispatcher
-from asyncio import wait, ensure_future, coroutine
+from asyncio import coroutine
 import re
 
 @dispatcher(object_name="index")
@@ -27,15 +26,8 @@ class IndiciesList(List):
     def extract(self, value):
         return len(value.popitem()[1]), None
 
-    def get_index(self, value):
-        indices = []
-        for i in value.keys():
-            indices.append(self.api.escnx.indices.get(index=i))
-        return indices
-
     def execute(self, *args, **kwargs):
         val = yield from self.api.escnx.indices.get(index=self.object)
-        #, filter_path=['*.settings.index.provided_name']
         def enumerator():
             for i in val.items():
                 yield i
