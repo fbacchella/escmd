@@ -7,7 +7,7 @@ import sys
 from enum import IntEnum
 import time
 from logging import Logger
-from asyncio import Queue, QueueEmpty, get_event_loop, wait_for, TimeoutError
+from asyncio import Queue, QueueEmpty, get_event_loop, wait_for, TimeoutError, wait
 
 
 status_line_re = re.compile(r'HTTP\/\S+\s+\d+\s+(.*?)$')
@@ -142,10 +142,9 @@ class PyCyrlMuliHander(object):
         handle.f_cb = failed_callback
 
         # put the query in the waiting queue, that launch it if possible
-        yield from self.waiting_handles.put(handle)
-        yield from future
-        # the future that will hold the  result
-        return future.result()
+        # and wait for the processing to be finished
+        yield from wait((future,self.waiting_handles.put(handle)))
+        return future
 
     def close(self):
         self.multi.close()
@@ -218,10 +217,10 @@ class PyCyrlMuliHander(object):
                         handle.cb(status, handle.headers, decoded)
                     elif status >= 300:
                         message = handle.headers.pop('__STATUS__')
-                        handle.f_cb(ConnectionError("http failed %s: %d\n    %s" % (handle.getinfo(pycurl.EFFECTIVE_URL), status, message), status, message))
+                        handle.f_cb(ConnectionError(status, message, "http failed %s: %d %s" % (handle.getinfo(pycurl.EFFECTIVE_URL), status, message)))
                 for handle, code, message in failed:
                     self.handles.remove(handle)
-                    handle.f_cb(ConnectionError("pycurl failed %s: %d" % (handle.getinfo(pycurl.EFFECTIVE_URL), code), code * -1, message))
+                    handle.f_cb(ConnectionError(code, message, "pycurl failed %s: %d" % (handle.getinfo(pycurl.EFFECTIVE_URL), code)))
 
 
 multi_handle = PyCyrlMuliHander()
