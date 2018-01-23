@@ -111,7 +111,8 @@ class IndiciesReindex(IndiciesVerb):
                 del settings.get('index')[k]
         settings.get('index', {}).get('version', {'created': None}).pop('created')
 
-        yield from self.api.escnx.indices.create(index=new_index_name, body={'settings': settings})
+        # Create the index with an empty mapping
+        yield from self.api.escnx.indices.create(index=new_index_name, body={'settings': settings, "mappings": {}})
 
         # Moving mapping
         for i in mappings.keys():
