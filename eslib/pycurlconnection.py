@@ -1,4 +1,5 @@
-from elasticsearch import Connection, ConnectionError
+from elasticsearch import Connection, ConnectionError, TransportError
+from elasticsearch.exceptions import HTTP_EXCEPTIONS
 import pycurl
 from io import BytesIO
 from elasticsearch.compat import urlencode
@@ -8,7 +9,10 @@ from enum import IntEnum
 import time
 from logging import Logger
 from asyncio import Queue, QueueEmpty, get_event_loop, wait_for, TimeoutError, wait
+import json
+import logging
 
+logger = logging.getLogger('eslib.pycurlconnection')
 
 status_line_re = re.compile(r'HTTP\/\S+\s+\d+\s+(.*?)$')
 
@@ -216,11 +220,30 @@ class PyCyrlMuliHander(object):
                     if status >= 200 and status < 300:
                         handle.cb(status, handle.headers, decoded)
                     elif status >= 300:
-                        message = handle.headers.pop('__STATUS__')
-                        handle.f_cb(ConnectionError(status, message, "http failed %s: %d %s" % (handle.getinfo(pycurl.EFFECTIVE_URL), status, message)))
+                        print(decoded)
+                        handle.f_cb(self._raise_error(status, decoded, content_type, http_message=handle.headers.pop('__STATUS__')))
                 for handle, code, message in failed:
                     self.handles.remove(handle)
                     handle.f_cb(ConnectionError(code, message, "pycurl failed %s: %d" % (handle.getinfo(pycurl.EFFECTIVE_URL), code)))
+
+    def _raise_error(self, status_code, raw_data, content_type='application/json', http_message=None):
+        """ Locate appropriate exception and raise it. """
+        error_message = raw_data
+        additional_info = None
+        if raw_data and content_type == 'application/json':
+            try:
+                additional_info = json.loads(raw_data)
+                error = additional_info.get('error', error_message)
+                if isinstance(error, dict) and 'type' in error:
+                    error_message = error['type']
+                    if 'resource.id' in error:
+                        error_message += ' for resource "' + error['resource.id'] + '"'
+            except (ValueError, TypeError) as err:
+                logger.warning('Undecodable raw error response from server: %s', err)
+        elif http_message is not None:
+            additional_info = {}
+            error_message = http_message
+        return HTTP_EXCEPTIONS.get(status_code, TransportError)(status_code, error_message, additional_info)
 
 
 multi_handle = PyCyrlMuliHander()
