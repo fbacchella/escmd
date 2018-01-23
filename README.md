@@ -19,7 +19,7 @@ Howto install in a virtualenv
     
 On a RedHat familly distribution, the following packages are needed:
 
-    yum install python-virtualenv gcc openssl-devel libcurl-devel libyaml-devel libxml2-devel
+    yum install python-virtualenv gcc openssl-devel libcurl-devel
 
 and `PYCURL_SSL_LIBRARY` must be set to `nss`. If missing, installation will not be able to detect the good ssl library used. 
 
@@ -48,6 +48,9 @@ Config file
 ===========
 
 EsCmd use a `ini` file to store settings, a example is given in `sample_config.ini`.
+
+It the environnement variable `ESCONFIG` is given, it will be used to find the config file.
+
 
 Generic options
 ===============
