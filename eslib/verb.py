@@ -39,7 +39,7 @@ class Verb(object):
         (verb_options, verb_args) = parser.parse_args(args)
         return (verb_options, verb_args)
 
-    def execute(self, **kwargs):
+    def execute(self, *args, **kwargs):
         kwargs = yield from self.filter_args(**kwargs)
         try:
             val = yield from self.get_elements()
@@ -52,21 +52,27 @@ class Verb(object):
             return enumerator(ex)
         #, filter_path=['*.settings.index.provided_name']
         coros = []
-        for i in val.keys():
-            task = ensure_future(self.action(index_name=i, index=val[i], **kwargs))
-            task.index = i
+        for name, object in val.items():
+            task = ensure_future(self.action(object_name=name, object=object, args_vector=args, **kwargs))
+            task.object_name = name
             coros.append(task)
+        # No matching object, try with empty option
+        if len(coros) == 0:
+            task = ensure_future(self.action(name=self.object, **kwargs))
+            task.object = name
+            coros.append(task)
+
         if len(coros) > 0:
             done, pending = yield from wait(coros)
             def enumerator():
                 for i in done:
                     if i.exception() is not None:
                         ex = i.exception()
-                        ex.source = i.index
+                        ex.source = i.object_name
                         ex.context = (type(ex), ex, ex.__traceback__)
                         yield ex
                     else:
-                        yield i.index, i.result()
+                        yield i.object_name, i.result()
             return enumerator()
         else:
             return ()

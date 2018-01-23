@@ -66,8 +66,8 @@ class IndiciesDelete(IndiciesVerb):
         return value.__str__()
 
     @coroutine
-    def action(self, index_name, **kwargs):
-        yield from self.api.escnx.indices.delete(index=index_name)
+    def action(self, object_name, **kwargs):
+        yield from self.api.escnx.indices.delete(index=object_name)
 
 
 @command(IndiciesDispatcher, verb='reindex')
@@ -85,7 +85,9 @@ class IndiciesReindex(IndiciesVerb):
     def to_str(self, value):
         return value.__str__()
 
-    def action(self, index_name, index, mappings=None, old_replica=None, version='next', current=None, separator='_', template=None, settings=None, base_regex=None):
+    def action(self, object_name, object, mappings=None, old_replica=None, version='next', current=None, separator='_', template=None, settings=None, base_regex=None, **kwargs):
+        index_name = object_name
+        index = object
         if base_regex is not None:
             match = base_regex.match(index_name)
             if len(match.groups()) == 1:
