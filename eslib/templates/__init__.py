@@ -13,19 +13,6 @@ class TemplatesDispatcher(Dispatcher):
     def get(self, name = None):
         return name
 
-@command(TemplatesDispatcher)
-class TemplatesList(List):
-
-    def execute(self, *args, **kwargs):
-        val = yield from self.api.escnx.indices.get_template(name=self.object)
-        def enumerator():
-            for i in val.items():
-                yield i
-        return enumerator()
-
-    def to_str(self, value):
-        return value.__str__()
-
 
 class TemplateVerb(Verb):
 
@@ -33,6 +20,13 @@ class TemplateVerb(Verb):
     def get_elements(self):
         val = yield from self.api.escnx.indices.get_template(name=self.object)
         return val
+
+
+@command(TemplatesDispatcher)
+class TemplatesList(List, TemplateVerb):
+
+    def to_str(self, value):
+        return value.__str__()
 
 
 @command(TemplatesDispatcher, verb='dump')

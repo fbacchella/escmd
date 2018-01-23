@@ -129,11 +129,11 @@ class List(RepeterVerb):
         parser.add_option("-t", "--template", dest="template", help="template for output formatting, default to %s" % self.template)
 
     def execute(self, template=None):
-        if template is not None:
-            self.template = template
-
-        for i in self.object:
-            yield i
+        val = yield from self.get_elements()
+        def enumerator():
+            for i in val.items():
+                yield i
+        return enumerator()
 
     def to_str(self, item):
         return item

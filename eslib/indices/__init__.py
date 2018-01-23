@@ -21,17 +21,10 @@ class IndiciesVerb(Verb):
 
 
 @command(IndiciesDispatcher)
-class IndiciesList(List):
+class IndiciesList(List, IndiciesVerb):
 
     def extract(self, value):
         return len(value.popitem()[1]), None
-
-    def execute(self, *args, **kwargs):
-        val = yield from self.api.escnx.indices.get(index=self.object)
-        def enumerator():
-            for i in val.items():
-                yield i
-        return enumerator()
 
     def to_str(self, value):
         return value[0]
