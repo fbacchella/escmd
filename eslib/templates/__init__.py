@@ -1,6 +1,7 @@
-import eslib.verb
+from eslib.verb import Verb, List
 import json
 from eslib.dispatcher import dispatcher, command, Dispatcher
+from asyncio import coroutine
 import sys
 
 @dispatcher(object_name="template")
@@ -13,30 +14,51 @@ class TemplatesDispatcher(Dispatcher):
         return name
 
 @command(TemplatesDispatcher)
-class TemplatesList(eslib.verb.List):
+class TemplatesList(List):
 
     def execute(self, *args, **kwargs):
-        return self.api.escnx.indices.get_template().keys()
+        val = yield from self.api.escnx.indices.get_template(name=self.object)
+        def enumerator():
+            for i in val.items():
+                yield i
+        return enumerator()
+
+    def to_str(self, value):
+        return value.__str__()
+
+
+class TemplateVerb(Verb):
+
+    @coroutine
+    def get_elements(self):
+        val = yield from self.api.escnx.indices.get_template(name=self.object)
+        return val
 
 
 @command(TemplatesDispatcher, verb='dump')
-class TemplatesDump(eslib.verb.Verb):
+class TemplatesDump(TemplateVerb):
 
     def execute(self, *args, **kwargs):
-        templates = self.api.escnx.indices.get_template(self.object)
-        if self.object in templates:
-            json.dump(templates[self.object], sys.stdout)
-            return templates[self.object]
-        else:
-            return None
+        val = yield from self.api.escnx.indices.get_template(index=self.object)
+        def enumerator():
+            for i in val.items():
+                yield i
+        return enumerator()
+
+    def to_str(self, value):
+        return value.__str__()
 
 @command(TemplatesDispatcher, verb='put')
-class TemplatesPut(eslib.verb.Verb):
+class TemplatesPut(TemplateVerb):
 
     def fill_parser(self, parser):
         parser.add_option("-f", "--template_file", dest="template_file_name", default=None)
 
-    def execute(self, template_file_name=None):
+    def action(self, object_name=None, object=None, template_file_name=None):
         with open(template_file_name, "r") as template_file:
             template = json.load(template_file)
-        return self.api.escnx.indices.put_template(name=self.object, body=template)
+        val = yield from self.api.escnx.indices.put_template(name=object_name, body=template)
+        return val
+
+    def to_str(self, value):
+        return value.__str__()
