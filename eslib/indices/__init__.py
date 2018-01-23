@@ -186,3 +186,22 @@ class IndiciesSettings(IndiciesVerb):
         if len(settings) == 0:
             return False
         print(self.api.escnx.indices.put_settings(body=settings, index=self.object))
+
+@command(IndiciesDispatcher, verb='dump')
+class IndiciesDump(IndiciesVerb):
+
+    def fill_parser(self, parser):
+        parser.add_option("-k", "--only_keys", dest="only_keys", default=False, action='store_true')
+
+    @coroutine
+    def action(self, args_vector=[], object=None, only_keys=False, **kwargs):
+        curs = object
+        for i in args_vector:
+            if not isinstance(curs, dict) or curs is None:
+                break
+            curs = curs.get(i, None)
+        if only_keys and isinstance(curs, dict):
+            return curs.keys()
+        else:
+            return curs
+
