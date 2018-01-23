@@ -65,8 +65,7 @@ class Dispatcher(object):
         cmd.object = self.get(**object_options)
 
         if cmd.validate():
-            delayed_async_action_list, callback = cmd.execute(*verb_args, **verb_options)
-            return (cmd, delayed_async_action_list, callback)
+            return (cmd, cmd.execute(*verb_args, **verb_options))
         else:
             raise ESLibError("validation failed")
 

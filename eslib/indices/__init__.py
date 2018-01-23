@@ -1,9 +1,8 @@
-import eslib.verb
+from eslib.verb import Verb, List
 from elasticsearch.exceptions import RequestError
 from eslib.dispatcher import dispatcher, command, Dispatcher
-
+from asyncio import wait, ensure_future, coroutine
 import re
-import json
 
 @dispatcher(object_name="index")
 class IndiciesDispatcher(Dispatcher):
@@ -14,52 +13,65 @@ class IndiciesDispatcher(Dispatcher):
     def get(self, name=None):
         return name
 
+class IndiciesVerb(Verb):
+
+    @coroutine
+    def get_elements(self):
+        val = yield from self.api.escnx.indices.get(index=self.object)
+        return val
+
 
 @command(IndiciesDispatcher)
-class IndiciesList(eslib.verb.List):
+class IndiciesList(List):
+
+    def extract(self, value):
+        return len(value.popitem()[1]), None
+
+    def get_index(self, value):
+        indices = []
+        for i in value.keys():
+            indices.append(self.api.escnx.indices.get(index=i))
+        return indices
 
     def execute(self, *args, **kwargs):
-        return self.api.escnx.cat.indices(), self.next
-
-    def next(self, value):
-        for i in value:
-            yield i,None
+        val = yield from self.api.escnx.indices.get(index=self.object)
+        #, filter_path=['*.settings.index.provided_name']
+        def enumerator():
+            for i in val.items():
+                yield i
+        return enumerator()
 
     def to_str(self, value):
-        if isinstance(value, dict):
-            if value.get('acknowledged', False):
-                return 'acknowledged'
-            else:
-                return json.dumps(value)
-        else:
-            return str(value)
+        return value[0]
 
 
 @command(IndiciesDispatcher, verb='forcemerge')
-class IndiciesForceMerge(eslib.verb.Verb):
+class IndiciesForceMerge(IndiciesVerb):
 
     def fill_parser(self, parser):
         parser.add_option("-m", "--max_num_segments", dest="max_num_segments", help="Max num segmens", default=1)
 
-    def execute(self, max_num_segments=1):
-        self.max_num_segments = max_num_segments
-        return self.api.escnx.indices.get(index=self.object, filter_path=['*.settings.index.provided_name']), self.next
+    def action(self, index_name, index, max_num_segments):
+        val = yield from self.api.escnx.indices.forcemerge(index_name, max_num_segments=max_num_segments, flush=True)
+        return val
 
-    def next(self, value):
-        for i in value:
-            index_name = value['index']
-            yield self.api.escnx.indices.forcemerge(index_name, max_num_segments=self.max_num_segments, flush=True), None
+    def to_str(self, value):
+        return "%s -> %s" % (value[0], value[1].__str__())
 
 
 @command(IndiciesDispatcher, verb='delete')
-class IndiciesDelete(eslib.verb.Verb):
+class IndiciesDelete(IndiciesVerb):
 
-    def execute(self, *args, **kwargs):
-        return self.api.escnx.indices.delete(index=self.object)
+    def to_str(self, value):
+        return value.__str__()
+
+    @coroutine
+    def action(self, index_name, **kwargs):
+        yield from self.api.escnx.indices.delete(index=index_name)
 
 
 @command(IndiciesDispatcher, verb='reindex')
-class IndiciesReindex(eslib.verb.Verb):
+class IndiciesReindex(IndiciesVerb):
 
     version_re = re.compile('(?P<indexseed>.*)\\.v(?P<numver>\\d+)')
 
@@ -68,59 +80,96 @@ class IndiciesReindex(eslib.verb.Verb):
         parser.add_option("-v", "--version", dest="version")
         parser.add_option("-c", "--current_suffix", dest="current", default=None)
         parser.add_option("-s", "--separator", dest="separator", default='_')
+        parser.add_option("-b", "--base_regex", dest="base_regex", default=None)
 
-    def execute(self, template_name=None, version='next', current=None, separator='_'):
-        template = None
-        mappings = None
-        settings = None
+    def to_str(self, value):
+        return value.__str__()
+
+    def action(self, index_name, index, mappings=None, old_replica=None, version='next', current=None, separator='_', template=None, settings=None, base_regex=None):
+        if base_regex is not None:
+            match = base_regex.match(index_name)
+            if len(match.groups()) == 1:
+                base_name = match.group(1)
+            else:
+                raise Exception('invalid matching pattern ')
+        else:
+            base_name = index_name
+        new_index_name = base_name + separator + version
+        v = yield from self.api.escnx.indices.exists(index=new_index_name)
+        if v:
+            return ('does exists')
+        if template is None:
+            print("reusing mapping")
+            mappings = index['mappings']
+            settings = index['settings']
+            old_replica = settings.get('index', {}).get('number_of_replicas', None)
+            settings['index']['number_of_replicas'] = 0
+        for k in 'creation_date', 'uuid', 'provided_name':
+            if k in settings.get('index'):
+                del settings.get('index')[k]
+        settings.get('index', {}).get('version', {'created': None}).pop('created')
+
+        yield from self.api.escnx.indices.create(index=new_index_name, body={'settings': settings})
+
+        # Moving mapping
+        for i in mappings.keys():
+            print("adding mapping for type", i)
+            yield from self.api.escnx.indices.put_mapping(doc_type=i, index=new_index_name, body=mappings[i],
+                                               update_all_types=True)
+
+        # Doing the reindexation
+        reindex_status = yield from self.api.escnx.reindex(
+            body={"conflicts": "proceed", 'source': {'index': index_name, 'sort': '_doc', 'size': 1000},
+                  'dest': {'index': new_index_name, 'version_type': 'external'}})
+
+        # Ensure the minimum segments
+        self.api.escnx.indices.forcemerge(new_index_name, max_num_segments=1, flush=False)
+
+        # Reset the good replica number
+        if old_replica is not None and old_replica != 0:
+            yield from self.api.escnx.indices.put_settings(index=new_index_name,
+                                                body={'index': {'number_of_replicas': old_replica}})
+
+        # Moving aliases
+        aliases = index['aliases']
+        aliases_actions = []
+        if len(aliases) > 0:
+            for a in aliases:
+                aliases_actions.append({'remove': {'index': index_name, 'alias': a}})
+                aliases_actions.append({'add': {'index': new_index_name, 'alias': a}})
+            yield from self.api.escnx.indices.update_aliases(body={
+                'actions': aliases_actions
+            })
+
+        # the old index was not suffixed, destroy it and keep it's name as an alias
+        if base_name == index_name:
+            yield from self.api.escnx.indices.delete(index=index_name)
+            yield from self.api.escnx.indices.update_aliases(body={
+                'actions': [
+                    {'add': {'index': new_index_name, 'alias': index_name}}
+                ]
+            })
+        return reindex_status
+
+    def filter_args(self, template_name=None, **kwargs):
         if template_name is not None:
-            templates = self.api.escnx.indices.get_template(name=template_name)
+            templates = yield from self.api.escnx.indices.get_template(name=template_name)
             if template_name in templates:
                 template = templates[template_name]
                 settings = template['settings']
                 mappings = template['mappings']
                 old_replica = settings.get('index', {}).get('number_of_replicas', None)
                 settings['index']['number_of_replicas'] = 0
-        for (index_name, index) in self.api.escnx.indices.get(index=self.object).items():
-            try:
-                new_index_name = index_name + separator + version
-                if self.api.escnx.indices.exists(index=new_index_name):
-                    continue
-                print('reindexing', index_name)
-                if template is None:
-                    print("reusing mapping")
-                    mappings = index['mappings']
-                    settings = index['settings']
-                    old_replica = settings.get('index', {}).get('number_of_replicas', None)
-                    settings['index']['number_of_replicas'] = 0
-                self.api.escnx.indices.create(index=new_index_name, body={'settings': settings})
-                for i in mappings.keys():
-                    print("adding mapping for type", i)
-                    self.api.escnx.indices.put_mapping(doc_type=i, index=new_index_name, body=mappings[i], update_all_types=True)
-                reindex_status =  self.api.escnx.reindex(body={"conflicts": "proceed", 'source': {'index': index_name, 'sort': '_doc', 'size': 1000}, 'dest': {'index': new_index_name, 'version_type': 'external'}})
-                self.api.escnx.indices.forcemerge(new_index_name, max_num_segments=1, flush=False)
-                if old_replica is not None and old_replica != 0:
-                    self.api.escnx.indices.put_settings(index=new_index_name, body={'index': {'number_of_replicas': old_replica }})
-                if current is not None:
-                    current_name = index_name + separator + current
-                    if self.api.escnx.indices.exists_alias(name=current_name):
-                        print(self.api.escnx.indices.delete_alias(index='_all', name=current_name))
-                        print(self.api.escnx.indices.put_alias(index=new_index_name, name=current_name))
-                self.api.escnx.indices.put_alias(index=new_index_name, name=index_name + separator + "reindexed" )
-                yield reindex_status
-            except RequestError as e:
-                if 'failures' in e.info and 'cause' in e.info['failures']:
-                    message = e.info['failures']['cause']
-                elif 'error' in e.info and  'root_cause' in e.info['error']['root_cause']:
-                    message = e.error + ", " + e.info['error']['root_cause'][0]['reason']
-                else:
-                    message = "%s" % e
-                print('failed to reindex %s: %s' % (index_name, message))
 
+            kwargs['mappings'] = mappings
+            kwargs['old_replica'] = old_replica
+        if kwargs.get('base_regex', None) is not None:
+            kwargs['base_regex'] = re.compile(kwargs['base_regex'])
+        return kwargs
 
 
 @command(IndiciesDispatcher, verb='settings')
-class IndiciesSettings(eslib.verb.Verb):
+class IndiciesSettings(IndiciesVerb):
 
     setting_re = re.compile('(?P<setting>[a-z0-9\\._]+)=(?P<value>.*)')
 

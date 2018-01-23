@@ -1,24 +1,16 @@
 import optparse
 import json
-from asyncio import Future
+from asyncio import Future, coroutine
 from elasticsearch.compat import string_types
 from collections import Iterable
-from eslib.asynctransport import QueryIterator
+from queue import Queue
+from asyncio import ensure_future, wait
 
 # Find the best implementation available on this platform
 try:
     from io import StringIO
 except:
     from io import StringIO
-
-
-def callback(cb):
-    def decorator(old_method):
-        def new_method(self, *args, **kwargs):
-            returned = old_method(self, *args, **kwargs)
-            return returned, cb.__get__(self)
-        return new_method
-    return decorator
 
 
 class Verb(object):
@@ -28,7 +20,7 @@ class Verb(object):
         self.dispatcher = object
         self.object = None
         self.waiting_futures = set()
-        self.results_futures = []
+        self.results = Queue()
 
     def fill_parser(self, parser):
         pass
@@ -47,7 +39,48 @@ class Verb(object):
         (verb_options, verb_args) = parser.parse_args(args)
         return (verb_options, verb_args)
 
-    def execute(self, *args, **kwargs):
+    def execute(self, **kwargs):
+        kwargs = yield from self.filter_args(**kwargs)
+        try:
+            val = yield from self.get_elements()
+        except Exception as ex:
+            # ex needs to be passed as argument, because of the yield from magic
+            # It's not defined when defining the function
+            def enumerator(ex):
+                ex.source = self.object
+                yield ex
+            return enumerator(ex)
+        #, filter_path=['*.settings.index.provided_name']
+        coros = []
+        for i in val.keys():
+            task = ensure_future(self.action(index_name=i, index=val[i], **kwargs))
+            task.index = i
+            coros.append(task)
+        if len(coros) > 0:
+            done, pending = yield from wait(coros)
+            def enumerator():
+                for i in done:
+                    if i.exception() is not None:
+                        ex = i.exception()
+                        ex.source = i.index
+                        ex.context = (type(ex), ex, ex.__traceback__)
+                        yield ex
+                    else:
+                        yield i.index, i.result()
+            return enumerator()
+        else:
+            return ()
+
+    @coroutine
+    def filter_args(self, **kwargs):
+        return kwargs
+
+    @coroutine
+    def get_elements(self):
+        raise NameError('Not implemented')
+
+    @coroutine
+    def action(self, **kwargs):
         raise NameError('Not implemented')
 
     def to_str(self, value):
@@ -67,40 +100,6 @@ class Verb(object):
     def status(self):
         """A default status command to run on success"""
         return 0;
-
-    def start(self, scheduler, data, callback):
-        self.scheduler = scheduler
-        self.add_async_query(data, callback)
-
-    def forward(self, future, callback):
-        data = future.result()
-        forwarded = False
-        ex = None
-        while callback is not None:
-            try:
-                data, callback = callback(data)
-            except Exception as e:
-                ex = e
-                break
-            for i in data if data is not None and not isinstance(data, QueryIterator) and isinstance(data, Iterable) and not isinstance(data, string_types) else (data,):
-                if isinstance(i, QueryIterator):
-                    self.add_async_query(i, callback)
-                    forwarded = True
-                else:
-                    pass
-            if forwarded:
-                callback = None
-        if not forwarded:
-            result_future = Future()
-            if ex is not None:
-                result_future.set_exception(ex)
-            else:
-                result_future.set_result(data)
-            self.results_futures.append(result_future)
-
-    def add_async_query(self, delayed_async_query, callback):
-        delayed_async_query.futur_result.add_done_callback(lambda x: self.forward(x, callback))
-        self.scheduler.schedule(delayed_async_query)
 
 
 class RepeterVerb(Verb):

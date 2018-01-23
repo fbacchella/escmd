@@ -220,7 +220,6 @@ class PyCyrlMuliHander(object):
                     if status >= 200 and status < 300:
                         handle.cb(status, handle.headers, decoded)
                     elif status >= 300:
-                        print(decoded)
                         handle.f_cb(self._raise_error(status, decoded, content_type, http_message=handle.headers.pop('__STATUS__')))
                 for handle, code, message in failed:
                     self.handles.remove(handle)

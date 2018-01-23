@@ -7,7 +7,9 @@ import eslib
 import collections
 import codecs
 from inspect import isgenerator
-from eslib.scheduler import Scheduler
+from asyncio import get_event_loop, wait, FIRST_COMPLETED
+from eslib.pycurlconnection import multi_handle
+from traceback import print_exception
 
 from eslib.context import Context, ConfigurationError
 
@@ -21,7 +23,11 @@ def print_result(verb, cmd, result):
     if not isinstance(result, (str, bytes, dict)) and isinstance(result, collections.Iterable) or isgenerator(result):
         # If execute return a generator, iterate other it
         for s in result:
-            if s != None:
+            if isinstance(s, Exception):
+                if hasattr(s, 'source'):
+                    print('Exception from source "%s":' % s.source, file=sys.stderr)
+                print_exception(type(s), s, s.__traceback__, file=sys.stderr)
+            elif s != None:
                 string = cmd.to_str(s)
                 if string:
                     safe_print(string)
@@ -42,18 +48,28 @@ def print_result(verb, cmd, result):
         return 0
 
 
-def async_print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
-    scheduler = Scheduler()
-    (cmd, delayed_async_query_list, callback) = dispatcher.run_phrase(verb, object_options, object_args)
-    cmd.start(scheduler, delayed_async_query_list, callback)
-    scheduler.schedule(delayed_async_query_list)
-
-    scheduler.run()
-
-
 def print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
-    (cmd, executed) = dispatcher.run_phrase(verb, object_options, object_args)
-    return print_result(verb, cmd, executed)
+    (cmd, toexecute) = dispatcher.run_phrase(verb, object_options, object_args)
+    loop = get_event_loop()
+    def looper():
+        done, pending = yield from wait((toexecute, multi_handle.perform()), loop=loop, return_when=FIRST_COMPLETED)
+        return done, pending
+    try:
+        done, pending = loop.run_until_complete(looper())
+        # finished, now ensure that multi_handle.perform() is finished
+        multi_handle.running = False
+        loop.run_until_complete(multi_handle.perform())
+        # done contain either a result/exception from toexecute or an exception from multi_handle.perform()
+        # In both case, the first result is sufficient
+        for i in done:
+            return print_result(verb, cmd, i.result())
+    except KeyboardInterrupt:
+        pass
+    finally:
+        try:
+            loop.close()
+        except:
+            pass
 
 
 # needed because dict.update is using shortcuts and don't works on subclass of dict
@@ -119,7 +135,7 @@ def main():
                         del object_options[k]
 
                 # run the found command and print the result
-                status = async_print_run_phrase(dispatcher, verb, object_options, object_args)
+                status = print_run_phrase(dispatcher, verb, object_options, object_args)
                 sys.exit(status)
             except (eslib.ESLibError) as e:
                 print("The action \"%s %s\" failed with \n    %s" % (dispatcher.object_name, verb, e.error_message))
