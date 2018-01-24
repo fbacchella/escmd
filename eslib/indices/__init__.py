@@ -72,7 +72,7 @@ class IndiciesReindex(IndiciesVerb):
     def to_str(self, value):
         return value.__str__()
 
-    def action(self, object_name, object, mappings=None, old_replica=None, version='next', current=None, separator='_', template=None, settings=None, base_regex=None, **kwargs):
+    def action(self, object_name, object, mappings=None, old_replica=None, version='next', current=None, separator='_', settings=None, base_regex=None, **kwargs):
         index_name = object_name
         index = object
         if base_regex is not None:
@@ -87,7 +87,7 @@ class IndiciesReindex(IndiciesVerb):
         v = yield from self.api.escnx.indices.exists(index=new_index_name)
         if v:
             return ('does exists')
-        if template is None:
+        if mappings is None:
             print("reusing mapping")
             mappings = index['mappings']
             settings = index['settings']
@@ -141,6 +141,7 @@ class IndiciesReindex(IndiciesVerb):
             })
         return reindex_status
 
+
     def filter_args(self, template_name=None, **kwargs):
         if template_name is not None:
             templates = yield from self.api.escnx.indices.get_template(name=template_name)
@@ -150,9 +151,11 @@ class IndiciesReindex(IndiciesVerb):
                 mappings = template['mappings']
                 old_replica = settings.get('index', {}).get('number_of_replicas', None)
                 settings['index']['number_of_replicas'] = 0
-
-            kwargs['mappings'] = mappings
-            kwargs['old_replica'] = old_replica
+                kwargs['mappings'] = mappings
+                kwargs['old_replica'] = old_replica
+                kwargs['settings'] = settings
+            else:
+                kwargs['settings'] = {}
         if kwargs.get('base_regex', None) is not None:
             kwargs['base_regex'] = re.compile(kwargs['base_regex'])
         return kwargs
