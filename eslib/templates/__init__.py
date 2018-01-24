@@ -1,4 +1,4 @@
-from eslib.verb import Verb, List
+from eslib.verb import Verb, List, DumpVerb
 import json
 from eslib.dispatcher import dispatcher, command, Dispatcher
 from asyncio import coroutine
@@ -30,17 +30,8 @@ class TemplatesList(List, TemplateVerb):
 
 
 @command(TemplatesDispatcher, verb='dump')
-class TemplatesDump(TemplateVerb):
-
-    def execute(self, *args, **kwargs):
-        val = yield from self.api.escnx.indices.get_template(index=self.object)
-        def enumerator():
-            for i in val.items():
-                yield i
-        return enumerator()
-
-    def to_str(self, value):
-        return value.__str__()
+class TemplatesDump(DumpVerb,TemplateVerb):
+    pass
 
 
 @command(TemplatesDispatcher, verb='put')

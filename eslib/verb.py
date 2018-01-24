@@ -1,8 +1,6 @@
 import optparse
 import json
-from asyncio import Future, coroutine
-from elasticsearch.compat import string_types
-from collections import Iterable
+from asyncio import coroutine
 from queue import Queue
 from asyncio import ensure_future, wait
 
@@ -107,6 +105,39 @@ class Verb(object):
         """A default status command to run on success"""
         return 0;
 
+class DumpVerb(Verb):
+
+    def fill_parser(self, parser):
+        parser.add_option("-k", "--only_keys", dest="only_keys", default=False, action='store_true')
+        parser.add_option("-p", "--pretty", dest="pretty", default=False, action='store_true')
+
+    @coroutine
+    def filter_args(self, pretty=False, only_keys=False, **kwargs):
+        if pretty:
+            self.formatting = {'indent': 2, 'sort_keys': True}
+        else:
+            self.formatting = {}
+        self.only_keys = only_keys
+        return super().filter_args(only_keys=only_keys, **kwargs)
+
+    @coroutine
+    def action(self, args_vector=[], object=None, only_keys=False, **kwargs):
+        curs = object
+        for i in args_vector:
+            if not isinstance(curs, dict) or curs is None:
+                break
+            curs = curs.get(i, None)
+        if only_keys and isinstance(curs, dict):
+            return curs.keys()
+        else:
+            return curs
+
+    def to_str(self, item):
+        if self.only_keys:
+            return json.dumps({item[0]: list(item[1])}, **self.formatting)
+        else:
+            return json.dumps({item[0]: item[1]}, **self.formatting)
+
 
 class RepeterVerb(Verb):
 
@@ -135,8 +166,6 @@ class List(RepeterVerb):
                 yield i
         return enumerator()
 
-    def to_str(self, item):
-        return item
 
 
 
