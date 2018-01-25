@@ -54,9 +54,13 @@ class Dispatcher(object):
             raise ESLibError("unknown verb %s" % verb)
         object = yield from cmd.get(**object_options)
         running = Running(cmd, object)
-        (verb_options, verb_args) = cmd.parse(object_args)
+        try:
+            (verb_options, verb_args) = cmd.parse(object_args)
+        except SystemExit:
+            return None
         #try:
-        if not cmd.validate(running, *verb_args, **vars(verb_options)):
+        validated = yield from cmd.validate(running, *verb_args, **vars(verb_options))
+        if not validated:
             raise ESLibError("validation failed")
         #except TypeError:
         #    raise ESLibError("validation failed")

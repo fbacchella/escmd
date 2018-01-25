@@ -65,7 +65,9 @@ def print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
         # In both case, the first result is sufficient
         for i in done:
             running = i.result()
-            return print_result(verb, running)
+            # If running is None, run_phrase excited with sys.exit, because of argparse
+            if running is not None:
+                return print_result(verb, running)
     except KeyboardInterrupt:
         pass
     finally:

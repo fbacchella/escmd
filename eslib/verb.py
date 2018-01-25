@@ -37,6 +37,7 @@ class Verb(object):
         else:
             return str(value)
 
+    @coroutine
     def validate(self, running, *args, **kwargs):
         return running.object is not None
 
@@ -68,7 +69,7 @@ class RepeterVerb(Verb):
             return enumerator(ex)
         coros = []
         for e in elements:
-            task = ensure_future(self.action(e, args_vector=args, **kwargs))
+            task = ensure_future(self.action(e, running, args_vector=args, **kwargs))
             coros.append(task)
         if len(coros) > 0:
             done, pending = yield from wait(coros)
@@ -76,7 +77,7 @@ class RepeterVerb(Verb):
                 for i in done:
                     if i.exception() is not None:
                         ex = i.exception()
-                        ex.source = i.object_name
+                        #ex.source = i.object
                         ex.context = (type(ex), ex, ex.__traceback__)
                         yield ex
                     else:
@@ -100,6 +101,7 @@ class DumpVerb(RepeterVerb):
         parser.add_option("-k", "--only_keys", dest="only_keys", default=False, action='store_true')
         parser.add_option("-p", "--pretty", dest="pretty", default=False, action='store_true')
 
+    @coroutine
     def validate(self, running, *args, pretty=False, only_keys=False, **kwargs):
         if pretty:
             running.formatting = {'indent': 2, 'sort_keys': True}
@@ -131,6 +133,7 @@ class List(RepeterVerb):
     verb = "list"
     template = "{name!s} {id!s}"
 
+    @coroutine
     def validate(self, running, template=None):
         running.template = template
         return True

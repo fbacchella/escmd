@@ -2,6 +2,7 @@ from eslib.verb import List, DumpVerb, RepeterVerb
 from eslib.dispatcher import dispatcher, command, Dispatcher
 from asyncio import coroutine
 import re
+from json import dumps
 
 
 @dispatcher(object_name="index")
@@ -46,12 +47,12 @@ class IndiciesDelete(RepeterVerb):
         return val
 
     @coroutine
-    def action(self, element, **kwargs):
+    def action(self, element, *args, **kwargs):
         val = yield from self.api.escnx.indices.delete(index=element[0])
         return val
 
+    @coroutine
     def validate(self, running, *args, **kwargs):
-        print(vars(running))
         if running.object == '*':
             return False
         return running.object is not None
@@ -72,14 +73,15 @@ class IndiciesReindex(RepeterVerb):
         parser.add_option("-s", "--separator", dest="separator", default='_')
         parser.add_option("-b", "--base_regex", dest="base_regex", default=None)
 
-    def to_str(self, value):
-        return value.__str__()
+    def to_str(self, running, value):
+        return dumps({value[0]: value[1]})
 
-    def action(self, object_name, object, mappings=None, old_replica=None, version='next', current=None, separator='_', settings=None, base_regex=None, **kwargs):
-        index_name = object_name
-        index = object
-        if base_regex is not None:
-            match = base_regex.match(index_name)
+    @coroutine
+    def action(self, element, running, version='next', current=None, separator='_', **kwargs):
+        index_name = element[0]
+        index = element[1]
+        if running.base_regex is not None:
+            match = running.base_regex.match(index_name)
             if len(match.groups()) == 1:
                 base_name = match.group(1)
             else:
@@ -90,12 +92,16 @@ class IndiciesReindex(RepeterVerb):
         v = yield from self.api.escnx.indices.exists(index=new_index_name)
         if v:
             return ('does exists')
-        if mappings is None:
+        if running.mappings is None:
             print("reusing mapping")
             mappings = index['mappings']
             settings = index['settings']
             old_replica = settings.get('index', {}).get('number_of_replicas', None)
             settings['index']['number_of_replicas'] = 0
+        else:
+            mappings = running.mappings
+            settings = dict(running.settings)
+            old_replica = running.old_replica
         for k in 'creation_date', 'uuid', 'provided_name':
             if k in settings.get('index'):
                 del settings.get('index')[k]
@@ -142,10 +148,14 @@ class IndiciesReindex(RepeterVerb):
                     {'add': {'index': new_index_name, 'alias': index_name}}
                 ]
             })
-        return reindex_status
+        return (index_name, reindex_status)
 
 
-    def filter_args(self, template_name=None, **kwargs):
+    @coroutine
+    def validate(self, running, *args, template_name=None, **kwargs):
+        running.settings = {}
+        running.mappings = None
+        running.old_replica = None
         if template_name is not None:
             templates = yield from self.api.escnx.indices.get_template(name=template_name)
             if template_name in templates:
@@ -154,14 +164,15 @@ class IndiciesReindex(RepeterVerb):
                 mappings = template['mappings']
                 old_replica = settings.get('index', {}).get('number_of_replicas', None)
                 settings['index']['number_of_replicas'] = 0
-                kwargs['mappings'] = mappings
-                kwargs['old_replica'] = old_replica
-                kwargs['settings'] = settings
-            else:
-                kwargs['settings'] = {}
+                running.mappings = mappings
+                running.old_replica = old_replica
+                running.settings = settings
+
         if kwargs.get('base_regex', None) is not None:
-            kwargs['base_regex'] = re.compile(kwargs['base_regex'])
-        return kwargs
+            running.base_regex = re.compile(kwargs['base_regex'])
+        else:
+            running.base_regex = None
+        return super().validate(running, *args, **kwargs)
 
 
 @command(IndiciesDispatcher, verb='settings')
