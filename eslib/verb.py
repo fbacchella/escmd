@@ -1,7 +1,6 @@
 import optparse
 import json
 from asyncio import coroutine
-from queue import Queue
 from asyncio import ensure_future, wait
 
 # Find the best implementation available on this platform
@@ -15,20 +14,10 @@ class Verb(object):
     """A abstract class, used to implements actual verb"""
     def __init__(self, dispatcher):
         self.api = dispatcher.api
-        self.dispatcher = object
-        self.object = None
-        self.waiting_futures = set()
-        self.results = Queue()
+        self.dispatcher = dispatcher
 
     def fill_parser(self, parser):
         pass
-
-    def validate(self):
-        """try to validate the object needed by the commande, should be overriden if the no particular object is expected"""
-        return True
-
-    def uses_template(self):
-        return False
 
     def parse(self, args):
         parser = optparse.OptionParser(usage=self.__doc__)
@@ -37,57 +26,7 @@ class Verb(object):
         (verb_options, verb_args) = parser.parse_args(args)
         return (verb_options, verb_args)
 
-    def execute(self, *args, **kwargs):
-        kwargs = yield from self.filter_args(**kwargs)
-        try:
-            val = yield from self.get_elements()
-        except Exception as ex:
-            # ex needs to be passed as argument, because of the yield from magic
-            # It's not defined when defining the function
-            def enumerator(ex):
-                ex.source = self.object
-                yield ex
-            return enumerator(ex)
-        #, filter_path=['*.settings.index.provided_name']
-        coros = []
-        for name, object in val.items():
-            task = ensure_future(self.action(object_name=name, object=object, args_vector=args, **kwargs))
-            task.object_name = name
-            coros.append(task)
-        # No matching object, try with empty option
-        if len(coros) == 0:
-            task = ensure_future(self.action(name=self.object, **kwargs))
-            task.object = name
-            coros.append(task)
-
-        if len(coros) > 0:
-            done, pending = yield from wait(coros)
-            def enumerator():
-                for i in done:
-                    if i.exception() is not None:
-                        ex = i.exception()
-                        ex.source = i.object_name
-                        ex.context = (type(ex), ex, ex.__traceback__)
-                        yield ex
-                    else:
-                        yield i.object_name, i.result()
-            return enumerator()
-        else:
-            return ()
-
-    @coroutine
-    def filter_args(self, **kwargs):
-        return kwargs
-
-    @coroutine
-    def get_elements(self):
-        raise NameError('Not implemented')
-
-    @coroutine
-    def action(self, **kwargs):
-        raise NameError('Not implemented')
-
-    def to_str(self, value):
+    def to_str(self, running, value):
         if value is True:
             return "success"
         elif isinstance(value, dict):
@@ -98,32 +37,81 @@ class Verb(object):
         else:
             return str(value)
 
-    def get(self, lister, **kwargs):
-        return lister.get(**kwargs)
+    def validate(self, running, *args, **kwargs):
+        return running.object is not None
+
+    @coroutine
+    def get(self, **object_options):
+        val = yield from self.dispatcher.get(**object_options)
+        return val
+
+    @coroutine
+    def execute(self, running, *args, **kwargs):
+        raise NotImplementedError
 
     def status(self):
         """A default status command to run on success"""
         return 0;
 
-class DumpVerb(Verb):
+class RepeterVerb(Verb):
+
+    @coroutine
+    def execute(self, running, *args, **kwargs):
+        try:
+            elements = yield from self.get_elements(running, **kwargs)
+        except Exception as ex:
+            # ex needs to be passed as argument, because of the 'yield from' magic,
+            # it's not defined when defining the function
+            def enumerator(ex):
+                ex.source = object
+                yield ex
+            return enumerator(ex)
+        coros = []
+        for e in elements:
+            task = ensure_future(self.action(e, args_vector=args, **kwargs))
+            coros.append(task)
+        if len(coros) > 0:
+            done, pending = yield from wait(coros)
+            def enumerator():
+                for i in done:
+                    if i.exception() is not None:
+                        ex = i.exception()
+                        ex.source = i.object_name
+                        ex.context = (type(ex), ex, ex.__traceback__)
+                        yield ex
+                    else:
+                        yield i.result()
+            return enumerator()
+        else:
+            return None
+
+    @coroutine
+    def action(self, **kwargs):
+        raise NotImplementedError
+
+    @coroutine
+    def get_elements(self, running, **kwargs):
+        return running.object.items()
+
+
+class DumpVerb(RepeterVerb):
 
     def fill_parser(self, parser):
         parser.add_option("-k", "--only_keys", dest="only_keys", default=False, action='store_true')
         parser.add_option("-p", "--pretty", dest="pretty", default=False, action='store_true')
 
-    @coroutine
-    def filter_args(self, pretty=False, only_keys=False, **kwargs):
+    def validate(self, running, *args, pretty=False, only_keys=False, **kwargs):
         if pretty:
-            self.formatting = {'indent': 2, 'sort_keys': True}
+            running.formatting = {'indent': 2, 'sort_keys': True}
         else:
-            self.formatting = {}
-        self.only_keys = only_keys
-        return super().filter_args(only_keys=only_keys, **kwargs)
+            running.formatting = {}
+        running.only_keys = only_keys
+        return super().validate(running, *args, **kwargs)
 
     @coroutine
-    def action(self, args_vector=[], object=None, only_keys=False, **kwargs):
-        curs = object
-        for i in args_vector:
+    def action(self, element, *args, only_keys=False, **kwargs):
+        curs = element
+        for i in args:
             if not isinstance(curs, dict) or curs is None:
                 break
             curs = curs.get(i, None)
@@ -132,41 +120,36 @@ class DumpVerb(Verb):
         else:
             return curs
 
-    def to_str(self, item):
-        if self.only_keys:
-            return json.dumps({item[0]: list(item[1])}, **self.formatting)
+    def to_str(self, running, item):
+        if running.only_keys:
+            return json.dumps({item[0]: list(item[1])}, **running.formatting)
         else:
-            return json.dumps({item[0]: item[1]}, **self.formatting)
-
-
-class RepeterVerb(Verb):
-
-    def validate(self, *args, **kwargs):
-        return self.object is not None
-
-    def get(self, lister, **kwargs):
-        return lister.list(**kwargs)
+            return json.dumps({item[0]: item[1]}, **running.formatting)
 
 
 class List(RepeterVerb):
     verb = "list"
     template = "{name!s} {id!s}"
 
-    def validate(self, *args, **kwargs):
+    def validate(self, running, template=None):
+        running.template = template
         return True
 
     def fill_parser(self, parser):
         super(List, self).fill_parser(parser)
         parser.add_option("-t", "--template", dest="template", help="template for output formatting, default to %s" % self.template)
 
-    def execute(self, template=None):
-        val = yield from self.get_elements()
+    def execute(self, running, template=None):
+        val = yield from self.get_elements(running)
         def enumerator():
-            for i in val.items():
+            for i in val:
                 yield i
         return enumerator()
 
-
+    def to_str(self, running, item):
+        name = item[0]
+        value = item[1]
+        return "%s %s" % (name, list(value.keys()))
 
 
 class Remove(Verb):

@@ -8,6 +8,7 @@ import collections
 import codecs
 from inspect import isgenerator
 from asyncio import get_event_loop, wait, FIRST_COMPLETED
+from eslib import ESLibError
 from eslib.pycurlconnection import multi_handle
 from traceback import print_exception
 
@@ -19,7 +20,9 @@ def safe_print(string):
     decoded = codecs.decode(encoded, sys.stdout.encoding, 'replace')
     print(decoded)
 
-def print_result(verb, cmd, result):
+def print_result(verb, running):
+    cmd = running.cmd
+    result = running.result
     if not isinstance(result, (str, bytes, dict)) and isinstance(result, collections.Iterable) or isgenerator(result):
         # If execute return a generator, iterate other it
         for s in result:
@@ -28,14 +31,14 @@ def print_result(verb, cmd, result):
                     print('Exception from source "%s":' % s.source, file=sys.stderr)
                 print_exception(type(s), s, s.__traceback__, file=sys.stderr)
             elif s != None:
-                string = cmd.to_str(s)
+                string = cmd.to_str(running, s)
                 if string:
                     safe_print(string)
                     sys.stdout.flush()
         return cmd.status()
     elif result is not None and result is not False:
         # Else if it return something, just print it
-        string = cmd.to_str(result)
+        string = cmd.to_str(running, result)
         if string:
             safe_print(string)
         return cmd.status()
@@ -49,23 +52,27 @@ def print_result(verb, cmd, result):
 
 
 def print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
-    (cmd, toexecute) = dispatcher.run_phrase(verb, object_options, object_args)
     loop = get_event_loop()
     def looper():
-        done, pending = yield from wait((toexecute, multi_handle.perform()), loop=loop, return_when=FIRST_COMPLETED)
+        done, pending = yield from wait((
+            dispatcher.run_phrase(verb, object_options, object_args),
+            multi_handle.perform()
+        ), loop=loop, return_when=FIRST_COMPLETED)
         return done, pending
     try:
         done, pending = loop.run_until_complete(looper())
-        # finished, now ensure that multi_handle.perform() is finished
-        multi_handle.running = False
-        loop.run_until_complete(multi_handle.perform())
-        # done contain either a result/exception from toexecute or an exception from multi_handle.perform()
+        # done contain either a result/exception from run_phrase or an exception from multi_handle.perform()
         # In both case, the first result is sufficient
         for i in done:
-            return print_result(verb, cmd, i.result())
+            running = i.result()
+            return print_result(verb, running)
     except KeyboardInterrupt:
         pass
     finally:
+        # finished, now ensure that multi_handle.perform() is finished
+        multi_handle.running = False
+        loop.run_until_complete(multi_handle.perform())
+        loop.stop()
         try:
             loop.close()
         except:

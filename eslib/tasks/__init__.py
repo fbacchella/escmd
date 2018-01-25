@@ -1,16 +1,18 @@
-from eslib.verb import Verb, List
+from eslib.verb import Verb, List, DumpVerb
 from eslib.dispatcher import dispatcher, command, Dispatcher
 from asyncio import coroutine
 import time
+
 
 @dispatcher(object_name="task")
 class TasksDispatcher(Dispatcher):
 
     def fill_parser(self, parser):
-        parser.add_option("-i", "--id", dest="id", help="tasks filter")
+        parser.add_option("-i", "--id", dest="name", help="tasks filter")
 
     def get(self, name=None):
         return name
+
 
 class TasksVerb(Verb):
 
@@ -47,4 +49,9 @@ class TasksList(List):
             id = value.get('id', '')
             running_time = running_time_in_nanos / 1e9
             start_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_time_in_millis/1000))
-            return "%s %s %s %s" % (id, action, running_time, start_time)
+            return "%s %s %0.6f '%s'" % (id, action, running_time, start_time)
+
+
+@command(TasksDispatcher, verb='dump')
+class IndiciesDump(DumpVerb,TasksVerb):
+    pass

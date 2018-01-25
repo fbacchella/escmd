@@ -1,5 +1,6 @@
 from eslib import ESLibError, dispatchers
-from asyncio import Future
+from eslib.running import Running
+from asyncio import coroutine
 
 
 def command(dispatcher_class, verb=None):
@@ -33,10 +34,11 @@ class Dispatcher(object):
         pass
 
     def execute(self):
-        NameError('Not implemented')
+        raise NotImplementedError
 
-    def get(self):
-        NameError('Not implemented')
+    @coroutine
+    def get(self, **object_options):
+        raise NotImplementedError
 
     def get_cmd(self, verb):
         if verb in self.verbs:
@@ -44,29 +46,27 @@ class Dispatcher(object):
             cmd = cmd_class(self)
             return cmd
         else:
-            # Everything failed so return false
-            return False
+            return None
 
     def run_phrase(self, verb, object_options={}, object_args=[]):
         cmd = self.get_cmd(verb)
-        if cmd:
-            (verb_options, verb_args) = cmd.parse(object_args)
-
-            # transform options to a dict and removed undeclared arguments or empty enumerations
-            # but keep empty string
-            verb_options = {k: v for k, v in list(vars(verb_options).items())
-                            if v is not None and (isinstance(v, str) or not hasattr(v, '__len__') or len(v) != 0)}
-            return self.execute_phrase(cmd, object_options, verb_options, verb_args)
-        else:
+        if cmd is None:
             raise ESLibError("unknown verb %s" % verb)
-
-
-    def execute_phrase(self, cmd, object_options={}, verb_options={}, verb_args=[]):
-        cmd.object = self.get(**object_options)
-
-        if cmd.validate():
-            return (cmd, cmd.execute(*verb_args, **verb_options))
-        else:
+        object = yield from cmd.get(**object_options)
+        running = Running(cmd, object)
+        (verb_options, verb_args) = cmd.parse(object_args)
+        #try:
+        if not cmd.validate(running, *verb_args, **vars(verb_options)):
             raise ESLibError("validation failed")
+        #except TypeError:
+        #    raise ESLibError("validation failed")
+        # transform options to a dict and removed undeclared arguments or empty enumerations
+        # but keep empty string
+        verb_options = {k: v for k, v in list(vars(verb_options).items())
+                        if v is not None and (isinstance(v, str) or not hasattr(v, '__len__') or len(v) != 0)}
+        running.result = yield from cmd.execute(running, *verb_args, **verb_options)
+        return running
+
+
 
 

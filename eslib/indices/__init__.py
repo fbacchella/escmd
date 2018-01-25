@@ -1,4 +1,4 @@
-from eslib.verb import Verb, List, DumpVerb
+from eslib.verb import List, DumpVerb, RepeterVerb
 from eslib.dispatcher import dispatcher, command, Dispatcher
 from asyncio import coroutine
 import re
@@ -10,55 +10,58 @@ class IndiciesDispatcher(Dispatcher):
     def fill_parser(self, parser):
         parser.add_option("-n", "--name", dest="name", help="index filter")
 
-    def get(self, name=None):
-        return name
-
-
-class IndiciesVerb(Verb):
-
     @coroutine
-    def get_elements(self):
-        val = yield from self.api.escnx.indices.get(index=self.object)
+    def get(self, name = '*'):
+        val = yield from self.api.escnx.indices.get(index=name)
         return val
 
-
 @command(IndiciesDispatcher)
-class IndiciesList(List, IndiciesVerb):
-
-    def extract(self, value):
-        return len(value.popitem()[1]), None
-
-    def to_str(self, value):
-        return value[0]
+class IndiciesList(List):
+    pass
 
 
 @command(IndiciesDispatcher, verb='forcemerge')
-class IndiciesForceMerge(IndiciesVerb):
+class IndiciesForceMerge(RepeterVerb):
 
     def fill_parser(self, parser):
         parser.add_option("-m", "--max_num_segments", dest="max_num_segments", help="Max num segmens", default=1)
 
-    def action(self, index_name, index, max_num_segments):
-        val = yield from self.api.escnx.indices.forcemerge(index_name, max_num_segments=max_num_segments, flush=True)
+    @coroutine
+    def action(self, element, *args, max_num_segments=False, **kwargs):
+        val = yield from self.api.escnx.indices.forcemerge(element[0], max_num_segments=max_num_segments, flush=True)
         return val
 
-    def to_str(self, value):
-        return "%s -> %s" % (value[0], value[1].__str__())
+    def to_str(self, running, value):
+        return "%s -> %s" % (list(running.object.keys())[0], value.__str__())
 
 
 @command(IndiciesDispatcher, verb='delete')
-class IndiciesDelete(IndiciesVerb):
-
-    def to_str(self, value):
-        return value.__str__()
+class IndiciesDelete(RepeterVerb):
 
     @coroutine
-    def action(self, object_name, **kwargs):
-        yield from self.api.escnx.indices.delete(index=object_name)
+    def get(self, name = None):
+        if name == None:
+            return '*'
+        val = yield from self.api.escnx.indices.get(index=name)
+        return val
+
+    @coroutine
+    def action(self, element, **kwargs):
+        val = yield from self.api.escnx.indices.delete(index=element[0])
+        return val
+
+    def validate(self, running, *args, **kwargs):
+        print(vars(running))
+        if running.object == '*':
+            return False
+        return running.object is not None
+
+    def to_str(self, running, value):
+        return "%s -> %s" % (list(running.object.keys())[0], value.__str__())
 
 
 @command(IndiciesDispatcher, verb='reindex')
-class IndiciesReindex(IndiciesVerb):
+class IndiciesReindex(RepeterVerb):
 
     version_re = re.compile('(?P<indexseed>.*)\\.v(?P<numver>\\d+)')
 
@@ -109,7 +112,7 @@ class IndiciesReindex(IndiciesVerb):
 
         # Doing the reindexation
         reindex_status = yield from self.api.escnx.reindex(
-            body={"conflicts": "proceed", 'source': {'index': index_name, 'sort': '_doc', 'size': 1000},
+            body={"conflicts": "proceed", 'source': {'index': index_name, 'sort': '_doc', 'size': 10000},
                   'dest': {'index': new_index_name, 'version_type': 'external'}})
 
         # Ensure the minimum segments
@@ -162,7 +165,7 @@ class IndiciesReindex(IndiciesVerb):
 
 
 @command(IndiciesDispatcher, verb='settings')
-class IndiciesSettings(IndiciesVerb):
+class IndiciesSettings(RepeterVerb):
 
     setting_re = re.compile('(?P<setting>[a-z0-9\\._]+)=(?P<value>.*)')
 
@@ -187,5 +190,5 @@ class IndiciesSettings(IndiciesVerb):
 
 
 @command(IndiciesDispatcher, verb='dump')
-class IndiciesDump(DumpVerb,IndiciesVerb):
+class IndiciesDump(DumpVerb):
     pass
