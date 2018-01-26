@@ -20,10 +20,11 @@ def safe_print(string):
     decoded = codecs.decode(encoded, sys.stdout.encoding, 'replace')
     print(decoded)
 
-def print_result(verb, running):
-    cmd = running.cmd
-    result = running.result
-    if not isinstance(result, (str, bytes, dict)) and isinstance(result, collections.Iterable) or isgenerator(result):
+def filter_result(cmd, running, result):
+    if isinstance(result, str):
+        safe_print(result)
+        return cmd.status()
+    elif isgenerator(result):
         # If execute return a generator, iterate other it
         for s in result:
             if isinstance(s, Exception):
@@ -31,25 +32,23 @@ def print_result(verb, running):
                     print('Exception from source "%s":' % s.source, file=sys.stderr)
                 print_exception(type(s), s, s.__traceback__, file=sys.stderr)
             elif s != None:
-                string = cmd.to_str(running, s)
-                if string:
-                    safe_print(string)
-                    sys.stdout.flush()
+                filter_result(cmd, running, s)
         return cmd.status()
     elif result is not None and result is not False:
         # Else if it return something, just print it
-        string = cmd.to_str(running, result)
-        if string:
-            safe_print(string)
-        return cmd.status()
+        return filter_result(cmd, running, cmd.to_str(running, result))
     elif result is not None:
         # It return false, something went wrong
-        print("'%s %s' failed" % (result.object_name, verb))
+        print("'%s %s' failed" % (result.object_name, cmd.verb))
         return cmd.status()
     else:
         # It returned nothing, it should be OK.
         return 0
 
+def print_result(running):
+    cmd = running.cmd
+    result = running.result
+    return filter_result(cmd, running, result)
 
 def print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
     loop = get_event_loop()
@@ -67,7 +66,7 @@ def print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
             running = i.result()
             # If running is None, run_phrase excited with sys.exit, because of argparse
             if running is not None:
-                return print_result(verb, running)
+                return print_result(running)
     except KeyboardInterrupt:
         pass
     finally:

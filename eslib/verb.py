@@ -123,7 +123,9 @@ class DumpVerb(RepeterVerb):
             return curs
 
     def to_str(self, running, item):
-        if running.only_keys:
+        if item is None:
+            return None
+        elif running.only_keys:
             return json.dumps({item[0]: list(item[1])}, **running.formatting)
         else:
             return json.dumps({item[0]: item[1]}, **running.formatting)

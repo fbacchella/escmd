@@ -41,6 +41,7 @@ class TemplatesPut(Verb):
         else:
             return None
 
+    @coroutine
     def validate(self, running, *args, **kwargs):
         print(vars(running))
         print(args)
@@ -54,5 +55,5 @@ class TemplatesPut(Verb):
         val = yield from self.api.escnx.indices.put_template(name=running.object, body=template)
         return val
 
-    def to_str(self, value):
+    def to_str(self, running, value):
         return value.__str__()
