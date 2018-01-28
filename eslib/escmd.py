@@ -52,6 +52,7 @@ def print_result(running):
 
 def print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
     loop = get_event_loop()
+    multi_handle = dispatcher.api.multi_handle
     def looper():
         done, pending = yield from wait((
             dispatcher.run_phrase(verb, object_options, object_args),

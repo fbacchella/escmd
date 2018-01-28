@@ -245,8 +245,6 @@ class PyCyrlMuliHander(object):
         return HTTP_EXCEPTIONS.get(status_code, TransportError)(status_code, error_message, additional_info)
 
 
-multi_handle = PyCyrlMuliHander()
-
 class PyCyrlConnection(Connection):
     """
      Default connection class using the `urllib3` library and the http protocol.
@@ -274,11 +272,14 @@ class PyCyrlConnection(Connection):
 
 
     def __init__(self,
+                 multi_handle=None,
                  http_auth=None, kerberos=False, user_agent="eslib",
                  use_ssl=False, verify_certs=False, ca_certs=None,
                  debug=False, debug_filter=CurlDebugType.HEADER + CurlDebugType.DATA, logger=sys.stderr,
                  **kwargs):
         super(PyCyrlConnection, self).__init__(use_ssl=use_ssl, **kwargs)
+
+        self.multi_handle = multi_handle
 
         if use_ssl:
             self.use_ssl = True
@@ -308,7 +309,7 @@ class PyCyrlConnection(Connection):
             # Don't keep persistent data
             pycurl.COOKIEFILE: '/dev/null',
             pycurl.COOKIEJAR: '/dev/null',
-            pycurl.SHARE: multi_handle.share,
+            pycurl.SHARE: self.multi_handle.share,
 
             # Follow redirect but not too much, it's needed for CAS
             pycurl.FOLLOWLOCATION: True,
@@ -387,7 +388,7 @@ class PyCyrlConnection(Connection):
         curl_handle.setopt(pycurl.CUSTOMREQUEST, method)
         if future is not None:
             curl_handle.connection = self
-            return multi_handle.query(curl_handle, future)
+            return self.multi_handle.query(curl_handle, future)
         else:
             start = time.time()
             curl_handle.perform()

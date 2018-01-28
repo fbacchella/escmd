@@ -1,6 +1,6 @@
 from configparser import ConfigParser
 from elasticsearch import Elasticsearch
-from eslib.pycurlconnection import PyCyrlConnection, CurlDebugType
+from eslib.pycurlconnection import PyCyrlConnection, CurlDebugType, PyCyrlMuliHander
 from eslib.asynctransport import AsyncTransport
 
 class ConfigurationError(Exception):
@@ -106,8 +106,10 @@ class Context(object):
             for f in filters:
                 self.filter |= CurlDebugType[f.upper()]
 
+        self.multi_handle = PyCyrlMuliHander(self.api_connect_settings['max_active'])
+
     def connect(self):
-        cnxprops={}
+        cnxprops={'multi_handle': self.multi_handle}
         if self.api_connect_settings['debug']:
             cnxprops.update({
                 'debug': self.api_connect_settings['debug'],
