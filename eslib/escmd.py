@@ -4,12 +4,9 @@ import os
 import sys
 import optparse
 import eslib
-import collections
 import codecs
 from inspect import isgenerator
-from asyncio import get_event_loop, wait, FIRST_COMPLETED
-from eslib import ESLibError
-from eslib.pycurlconnection import multi_handle
+from asyncio import get_event_loop, wait, FIRST_COMPLETED, gather
 from traceback import print_exception
 
 from eslib.context import Context, ConfigurationError
@@ -71,14 +68,12 @@ def print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
     except KeyboardInterrupt:
         pass
     finally:
-        # finished, now ensure that multi_handle.perform() is finished
+        # finished, now ensure that multi_handle.perform() is finished and all previous pending tasks
         multi_handle.running = False
-        loop.run_until_complete(multi_handle.perform())
+        pending.add(multi_handle.perform())
+        loop.run_until_complete(gather(*pending))
         loop.stop()
-        try:
-            loop.close()
-        except:
-            pass
+        loop.close()
 
 
 # needed because dict.update is using shortcuts and don't works on subclass of dict
