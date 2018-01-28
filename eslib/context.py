@@ -29,6 +29,7 @@ class Context(object):
         'debug': False,
         'log': None,
         'user_agent': None,
+        'max_active': 10
     }
 
     def __init__(self, config_file=None, **kwargs):

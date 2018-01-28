@@ -132,6 +132,7 @@ class PyCyrlMuliHander(object):
         self.handles = set()
         self.waiting_handles = Queue()
         self.running = True
+        self.max_active = max_query
 
     def query(self, handle, future):
         def manage_callback(status, headers, data):
@@ -163,7 +164,7 @@ class PyCyrlMuliHander(object):
 
     def _try_load_queries(self, wait=True, timeout=1.0):
         added = 0
-        while True:
+        while len(self.handles) < self.max_active:
             try:
                 if wait:
                     handler = yield from wait_for(self.waiting_handles.get(), timeout)
