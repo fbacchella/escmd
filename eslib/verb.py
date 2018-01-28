@@ -108,19 +108,20 @@ class DumpVerb(RepeterVerb):
         else:
             running.formatting = {}
         running.only_keys = only_keys
-        return super().validate(running, *args, **kwargs)
+        running.args_vector = args
+        return super().validate(running, **kwargs)
 
     @coroutine
-    def action(self, element, *args, only_keys=False, **kwargs):
-        curs = element
-        for i in args:
+    def action(self, element, running, *args, only_keys=False, **kwargs):
+        curs = element[1]
+        for i in running.args_vector:
             if not isinstance(curs, dict) or curs is None:
                 break
             curs = curs.get(i, None)
         if only_keys and isinstance(curs, dict):
-            return curs.keys()
+            return (element[0], curs.keys())
         else:
-            return curs
+            return (element[0], curs)
 
     def to_str(self, running, item):
         if item is None:
