@@ -1,5 +1,6 @@
-import eslib.verb
+from asyncio import coroutine
 
+from eslib.verb import List, DumpVerb
 from eslib.dispatcher import dispatcher, command, Dispatcher
 
 
@@ -9,14 +10,21 @@ class NodesDispatcher(Dispatcher):
     def fill_parser(self, parser):
         parser.add_option("-n", "--nodes", dest="nodes", help="nodes filter")
 
+    @coroutine
     def get(self, nodes=None):
-        if nodes is not None:
-            nodes = self.api.escnx.nodes.info(nodes)
-            print(nodes)
+        nodes = yield from self.api.escnx.nodes.info(nodes)
+        return nodes['nodes']
 
 
 @command(NodesDispatcher)
-class NodesList(eslib.verb.List):
+class NodesList(List):
 
-    def execute(self, *args, **kwargs):
-        return self.api.escnx.cat.nodes()
+    def to_str(self, running, item):
+        name = item[0]
+        value = item[1]
+        return "%s %s '%s'" % (name, value['host'], ', '.join(value['roles']))
+
+
+@command(NodesDispatcher, verb='dump')
+class NodesDump(DumpVerb):
+    pass
