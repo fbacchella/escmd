@@ -1,4 +1,4 @@
-from eslib.verb import List, DumpVerb, RepeterVerb
+from eslib.verb import DumpVerb, RepeterVerb
 from eslib.dispatcher import dispatcher, command, Dispatcher
 from asyncio import coroutine
 import re
@@ -16,9 +16,18 @@ class IndiciesDispatcher(Dispatcher):
         val = yield from self.api.escnx.indices.get(index=name)
         return val
 
-@command(IndiciesDispatcher)
-class IndiciesList(List):
-    pass
+
+@command(IndiciesDispatcher, verb='list')
+class IndiciesList(RepeterVerb):
+
+    @coroutine
+    def action(self, element, *args, **kwargs):
+        val = yield from self.api.escnx.indices.stats(index=element[0])
+        return val
+
+    def to_str(self, running, item):
+        for i,j in item['indices'].items():
+            return "%s\t%12d\t%4d" % (i,j['primaries']['docs']['count'],j['total']['segments']['count'])
 
 
 @command(IndiciesDispatcher, verb='forcemerge')
