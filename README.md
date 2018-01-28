@@ -98,4 +98,76 @@ It uses [Python's GSSAPI](https://pypi.python.org/pypi/gssapi) but it's imported
 List of Nouns
 =============
 
+### template
 
+#### list
+#### dump
+#### put
+
+    -h, --help            show this help message and exit
+    -f TEMPLATE_FILE_NAME, --template_file=TEMPLATE_FILE_NAME
+
+### node
+### task
+### index
+
+#### list
+#### reindex
+
+    -h, --help            show this help message and exit
+    -t TEMPLATE_NAME, --use_template=TEMPLATE_NAME
+                          Template to use for reindexing
+    -v VERSION, --version=VERSION
+    -c CURRENT, --current_suffix=CURRENT
+    -s SEPARATOR, --separator=SEPARATOR
+    -b BASE_REGEX, --base_regex=BASE_REGEX
+
+Force the reindex of a index. If `--use_template`, the given template will be used for mapping, otherwise, it will use
+same than the old index. Aliases as kept from the old index.
+
+#### settings
+#### dump
+#### delete
+#### forcemerge
+
+### cluster
+
+#### readsettings
+
+Used to display settings.
+
+    Options:
+      -h, --help       show this help message and exit
+      -k, --only_keys  
+      -p, --pretty     
+      -f, --flat       
+
+It can take a path to sub-settings, for easier search. Without `--flat`, results are returned as a json object. With it,
+each value is returned flattened from start
+
+For examples:
+
+    $ escmd cluster readsettings -f | sort -V
+    action.auto_create_index: true
+    action.destructive_requires_name: false
+    action.master.force_local: false
+    ...
+    xpack.watcher.transform.search.default_timeout: 
+    xpack.watcher.trigger.schedule.ticker.tick_interval: 500ms
+    xpack.watcher.watch.scroll.size: 0
+
+    $ escmd cluster readsettings -p
+    persistent: {}
+    defaults: {
+      "action": {
+        "auto_create_index": "true",
+    ...
+          "watch": {
+            "scroll": {
+              "size": "0"
+            }
+          }
+        }
+      }
+    }
+    transient: {}
