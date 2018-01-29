@@ -186,7 +186,7 @@ class ReadSettings(DumpVerb):
 
     @coroutine
     def get(self):
-        return True
+        raise NotImplementedError
 
     @coroutine
     def validate(self, running, *args, flat=False, **kwargs):
@@ -231,7 +231,7 @@ class ReadSettings(DumpVerb):
                         v = json.dumps(list(v.keys()), **running.formatting)
                     else:
                         v = json.dumps(v, **running.formatting)
-                yield "%s: %s" % (k, v)
+                    yield '{"%s": %s}' % (k, v)
 
 
 class WriteSettings(Verb):

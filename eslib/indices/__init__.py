@@ -184,31 +184,6 @@ class IndiciesReindex(RepeterVerb):
         return super().validate(running, *args, **kwargs)
 
 
-@command(IndiciesDispatcher, verb='settings')
-class IndiciesSettings(RepeterVerb):
-
-    setting_re = re.compile('(?P<setting>[a-z0-9\\._]+)=(?P<value>.*)')
-
-    def execute(self, *args, **kwargs):
-        settings = {}
-        for i in args:
-            matched = IndiciesSettings.setting_re.match(i)
-            if matched is None:
-                continue
-            base = settings
-            path = matched.group('setting').split('.')
-            for j in path[:-1]:
-                base[j] = {}
-                base = base[j]
-            try:
-                base[path[-1]] = int(matched.group('value'))
-            except ValueError:
-                base[path[-1]] = matched.group('value')
-        if len(settings) == 0:
-            return False
-        print(self.api.escnx.indices.put_settings(body=settings, index=self.object))
-
-
 @command(IndiciesDispatcher, verb='dump')
 class IndiciesDump(DumpVerb):
     pass
@@ -219,15 +194,31 @@ class IndiciesReadSettings(ReadSettings):
 
     @coroutine
     def get(self, **object_options):
-        val = yield from self.dispatcher.get(include_defaults=True, flat_settings=False, **object_options)
+        val = yield from self.api.escnx.cat.indices(index=object_options.get('name', '*'), format='json', h='index')
         return val
 
     @coroutine
     def get_elements(self, running, **kwargs):
-        index_names = []
-        for i in running.object.items():
-            index_names.append((i[0], i[1]['settings']['index']))
-        return index_names
+        indices = []
+        for i in running.object:
+            index_entry = yield from self.dispatcher.get(name=i['index'], include_defaults=True, flat_settings=running.flat)
+            index_name, index_data = next(iter(index_entry.items()))
+            if running.flat:
+                #print(index_data['settings'])
+                indices.append((index_name, index_data['settings']))
+            else:
+                indices.append((index_name, index_data['settings']['index']))
+        return indices
+
+    def to_str(self, running, item):
+        if running.flat:
+            # remove 'index.' at the beginning of settings names
+            k,v = next(iter(item[0].items()))
+            #yield k
+            v = {i.replace('index.', '%s/' % k): j for i,j in v.items()}
+            return super().to_str(running, ({k: v},))
+        elif isinstance(item, list):
+            return super().to_str(running, item)
 
 
 @command(IndiciesDispatcher, verb='writesettings')
@@ -235,19 +226,17 @@ class IndiciesWriteSettings(WriteSettings, RepeterVerb):
 
     @coroutine
     def get(self, **object_options):
-        val = yield from self.dispatcher.get(**object_options)
+        val = yield from self.api.escnx.cat.indices(index=object_options.get('name', '*'), format='json', h='index')
         return val
 
     @coroutine
     def get_elements(self, running, **kwargs):
         index_names = []
-        for i in running.object.items():
-            index_names.append((i[0], None))
+        for i in running.object:
+            index_names.append((i['index'], None))
         return index_names
 
     @coroutine
     def action(self, element, running, *args, **kwargs):
-        print(element, args, kwargs)
         val = yield from self.api.escnx.indices.put_settings(body=running.values, index=element[0])
         return val
-

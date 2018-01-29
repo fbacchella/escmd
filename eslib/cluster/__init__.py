@@ -13,6 +13,10 @@ class ClusterDispatcher(Dispatcher):
 class ClusterReadSettings(ReadSettings):
 
     @coroutine
+    def get(self):
+        return True
+
+    @coroutine
     def get_elements(self, running, **kwargs):
         val = yield from self.api.escnx.cluster.get_settings(include_defaults=True, flat_settings=running.flat)
         return val.items()
