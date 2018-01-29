@@ -70,7 +70,6 @@ def print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
     finally:
         # finished, now ensure that multi_handle.perform() is finished and all previous pending tasks
         multi_handle.running = False
-        pending.add(multi_handle.perform())
         loop.run_until_complete(gather(*pending))
         loop.stop()
         loop.close()

@@ -218,7 +218,10 @@ class PyCyrlMuliHander(object):
                     self.handles.remove(handle)
                     status = handle.getinfo(pycurl.RESPONSE_CODE)
                     content_type, decoded = decode_body(handle)
-                    if status >= 200 and status < 300:
+                    if not self.running:
+                        # is stopped, just swallow content
+                        continue
+                    elif status >= 200 and status < 300:
                         handle.cb(status, handle.headers, decoded)
                     elif status >= 300:
                         handle.f_cb(self._raise_error(status, decoded, content_type, http_message=handle.headers.pop('__STATUS__')))
