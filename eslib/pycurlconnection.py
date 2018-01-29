@@ -18,14 +18,27 @@ status_line_re = re.compile(r'HTTP\/\S+\s+\d+\s+(.*?)$')
 
 def get_header_function(headers):
 
+    # Current header are store in a different dict
+    # It will be flushed to real dict headers when an empty line is found
+    # Needs because of redirect following, we just keep the last headers seen
+    headers_buffer = {}
+
     def header_function(header_line):
         # HTTP standard specifies that headers are encoded in iso-8859-1.
-        header_line = header_line.decode('iso-8859-1')
+        header_line = header_line.decode('iso-8859-1').strip()
 
-        #Catch the status line
-        if not '__STATUS__' in headers:
+        # Reached the end-of-headers line, flush the headers buffer
+        if len(header_line.strip()) == 0:
+            headers.clear()
+            headers.update(headers_buffer)
+            headers_buffer.clear()
+            return
+
+        #Catch the status line, it's the first one
+        if not '__STATUS__' in headers_buffer:
             m = status_line_re.findall(header_line.strip())
-            headers['__STATUS__'] = m[0]
+            headers_buffer['__STATUS__'] = m[0]
+            return
 
         # Header lines include the first status line (HTTP/1.x ...).
         # We are going to ignore all lines that don't have a colon in them.
@@ -47,10 +60,31 @@ def get_header_function(headers):
         name = name.lower()
 
         # Now we can actually record the header name and value.
-        headers[name] = value
+        headers_buffer[name] = value
+
     return header_function
 
 content_type_re = re.compile("(?P<content_type>.*?); (?:charset=(?P<charset>.*))")
+
+def return_error(status_code, raw_data, content_type='application/json', http_message=None):
+    """ Locate appropriate exception and raise it. """
+    error_message = raw_data
+    additional_info = None
+    if raw_data and content_type == 'application/json':
+        try:
+            additional_info = json.loads(raw_data)
+            error = additional_info.get('error', error_message)
+            if isinstance(error, dict) and 'type' in error:
+                error_message = error['type']
+                if 'resource.id' in error:
+                    error_message += ' for resource "' + error['resource.id'] + '"'
+        except (ValueError, TypeError) as err:
+            logger.warning('Undecodable raw error response from server: %s', err)
+    elif http_message is not None:
+        additional_info = {}
+        error_message = http_message
+    return HTTP_EXCEPTIONS.get(status_code, TransportError)(status_code, error_message, additional_info)
+
 
 def decode_body(handler):
     encoding = 'UTF-8'
@@ -224,29 +258,10 @@ class PyCyrlMuliHander(object):
                     elif status >= 200 and status < 300:
                         handle.cb(status, handle.headers, decoded)
                     elif status >= 300:
-                        handle.f_cb(self._raise_error(status, decoded, content_type, http_message=handle.headers.pop('__STATUS__')))
+                        handle.f_cb(return_error(status, decoded, content_type, http_message=handle.headers.pop('__STATUS__')))
                 for handle, code, message in failed:
                     self.handles.remove(handle)
                     handle.f_cb(ConnectionError(code, message, "pycurl failed %s: %d" % (handle.getinfo(pycurl.EFFECTIVE_URL), code)))
-
-    def _raise_error(self, status_code, raw_data, content_type='application/json', http_message=None):
-        """ Locate appropriate exception and raise it. """
-        error_message = raw_data
-        additional_info = None
-        if raw_data and content_type == 'application/json':
-            try:
-                additional_info = json.loads(raw_data)
-                error = additional_info.get('error', error_message)
-                if isinstance(error, dict) and 'type' in error:
-                    error_message = error['type']
-                    if 'resource.id' in error:
-                        error_message += ' for resource "' + error['resource.id'] + '"'
-            except (ValueError, TypeError) as err:
-                logger.warning('Undecodable raw error response from server: %s', err)
-        elif http_message is not None:
-            additional_info = {}
-            error_message = http_message
-        return HTTP_EXCEPTIONS.get(status_code, TransportError)(status_code, error_message, additional_info)
 
 
 class PyCyrlConnection(Connection):
@@ -404,8 +419,9 @@ class PyCyrlConnection(Connection):
             (content_type, body) = decode_body(curl_handle)
 
             if not (200 <= status < 300) and status not in ignore:
-                self.log_request_fail(method, url, curl_handle.buffer.getvalue(), duration, status, body)
-                self._raise_error(status, body, content_type)
+                self.log_request_fail(method, full_url, url, body, duration, status)
+                http_message = curl_handle.headers.pop('__STATUS__')
+                raise return_error(status, body, content_type, http_message)
 
             self.log_request_success(method, full_url, url, curl_handle.buffer.getvalue(), status,
                                      body, duration)
@@ -414,4 +430,3 @@ class PyCyrlConnection(Connection):
 
     def close(self):
         pass
-
