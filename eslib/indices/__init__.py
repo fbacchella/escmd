@@ -1,4 +1,4 @@
-from eslib.verb import DumpVerb, RepeterVerb
+from eslib.verb import DumpVerb, RepeterVerb, ReadSettings, WriteSettings
 from eslib.dispatcher import dispatcher, command, Dispatcher
 from asyncio import coroutine
 import re
@@ -12,8 +12,8 @@ class IndiciesDispatcher(Dispatcher):
         parser.add_option("-n", "--name", dest="name", help="index filter")
 
     @coroutine
-    def get(self, name = '*'):
-        val = yield from self.api.escnx.indices.get(index=name)
+    def get(self, name = '*', **kwargs):
+        val = yield from self.api.escnx.indices.get(index=name, **kwargs)
         return val
 
 
@@ -212,3 +212,42 @@ class IndiciesSettings(RepeterVerb):
 @command(IndiciesDispatcher, verb='dump')
 class IndiciesDump(DumpVerb):
     pass
+
+
+@command(IndiciesDispatcher, verb='readsettings')
+class IndiciesReadSettings(ReadSettings):
+
+    @coroutine
+    def get(self, **object_options):
+        val = yield from self.dispatcher.get(include_defaults=True, flat_settings=False, **object_options)
+        return val
+
+    @coroutine
+    def get_elements(self, running, **kwargs):
+        index_names = []
+        for i in running.object.items():
+            index_names.append((i[0], i[1]['settings']['index']))
+        return index_names
+
+
+@command(IndiciesDispatcher, verb='writesettings')
+class IndiciesWriteSettings(WriteSettings, RepeterVerb):
+
+    @coroutine
+    def get(self, **object_options):
+        val = yield from self.dispatcher.get(**object_options)
+        return val
+
+    @coroutine
+    def get_elements(self, running, **kwargs):
+        index_names = []
+        for i in running.object.items():
+            index_names.append((i[0], None))
+        return index_names
+
+    @coroutine
+    def action(self, element, running, *args, **kwargs):
+        print(element, args, kwargs)
+        val = yield from self.api.escnx.indices.put_settings(body=running.values, index=element[0])
+        return val
+
