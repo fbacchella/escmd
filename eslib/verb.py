@@ -1,5 +1,7 @@
 import optparse
 import json
+import collections
+import re
 from asyncio import coroutine
 from asyncio import ensure_future, wait
 
@@ -173,3 +175,114 @@ class RemoveForce(Remove):
 
     def execute(self, *args, **kwargs):
         return self.object.remove(**kwargs)
+
+
+class ReadSettings(DumpVerb):
+
+    def fill_parser(self, parser):
+        parser.add_option("-k", "--only_keys", dest="only_keys", default=False, action='store_true')
+        parser.add_option("-p", "--pretty", dest="pretty", default=False, action='store_true')
+        parser.add_option("-f", "--flat", dest="flat", default=False, action='store_true')
+
+    @coroutine
+    def get(self):
+        return True
+
+    @coroutine
+    def validate(self, running, *args, flat=False, **kwargs):
+        running.settings = []
+        running.flat = flat
+        for i in args:
+            setting_path = i.split('.')
+            running.settings.append(setting_path)
+        return super().validate(running, **kwargs)
+
+    @coroutine
+    def action(self, element, running, *args, only_keys=False, **kwargs):
+        values = []
+        if len(running.settings) > 0:
+            for i in running.settings:
+                curs = {element[0]: element[1]}
+                for j in i:
+                    if not isinstance(curs, dict) or curs is None:
+                        break
+                    curs = curs.get(j, None)
+                if curs is not None:
+                    if only_keys and isinstance(curs, dict):
+                        values.append({'.'.join(i): curs.keys()})
+                    else:
+                        values.append({'.'.join(i): curs})
+        else:
+            values.append({element[0]: element[1]})
+        return values
+
+    def to_str(self, running, item):
+        if len(item) == 0:
+            yield None
+        else:
+            for i in item:
+                (k, v) = next(iter(i.items()))
+                if running.flat:
+                    for (sk, sv) in v.items():
+                        yield "%s=%s" % (sk, sv)
+                    return
+                elif not isinstance(v, str):
+                    if running.only_keys:
+                        v = json.dumps(list(v.keys()), **running.formatting)
+                    else:
+                        v = json.dumps(v, **running.formatting)
+                yield "%s: %s" % (k, v)
+
+
+class WriteSettings(Verb):
+
+    keyvalue_re = re.compile(r'(^[a-z0-9_\.]+)=(.*)$')
+    keydepth_re = re.compile(r'^([a-z0-9_]+)(?:\.(.*))?$')
+
+    def fill_parser(self, parser):
+        parser.add_option('-f', '--settings_file', dest='settings_file_name', default=None)
+
+    @coroutine
+    def get(self):
+        return True
+
+    @coroutine
+    def validate(self, running, *args, settings_file_name=None, **kwargs):
+        values = {}
+        if settings_file_name is not None:
+            with open(settings_file_name, "r") as settings_file:
+                values = json.load(settings_file)
+        try:
+            for i in args:
+                k, v = next(iter(WriteSettings.keyvalue_re.finditer(i))).groups()
+                self._dict_merge(values, self._path_to_dict(k, v))
+        except Exception as e:
+            return False
+        running.values = values
+        return True
+
+    def _path_to_dict(self, path, value, current_dict = {}):
+        current_key, next_path = next(WriteSettings.keydepth_re.finditer(path)).groups()
+        if next_path is None:
+            current_dict[current_key] = value
+        else:
+            current_dict[current_key] = self._path_to_dict(next_path, value, {})
+        return current_dict
+
+    # see https://gist.github.com/angstwad/bf22d1822c38a92ec0a9
+    def _dict_merge(self, dct, merge_dct):
+        """ Recursive dict merge. Inspired by :meth:``dict.update()``, instead of
+        updating only top-level keys, dict_merge recurses down into dicts nested
+        to an arbitrary depth, updating keys. The ``merge_dct`` is merged into
+        ``dct``.
+
+        :param dct: dict onto which the merge is executed
+        :param merge_dct: dct merged into dct
+        :return: None
+        """
+        for k, v in merge_dct.items():
+            if (k in dct and isinstance(dct[k], dict)
+                    and isinstance(merge_dct[k], collections.Mapping)):
+                self._dict_merge(dct[k], merge_dct[k])
+            else:
+                dct[k] = merge_dct[k]
