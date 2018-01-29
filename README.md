@@ -108,7 +108,9 @@ List of Nouns
     -f TEMPLATE_FILE_NAME, --template_file=TEMPLATE_FILE_NAME
 
 ### node
+
 ### task
+
 ### index
 
 #### list
@@ -125,10 +127,28 @@ List of Nouns
 Force the reindex of a index. If `--use_template`, the given template will be used for mapping, otherwise, it will use
 same than the old index. Aliases as kept from the old index.
 
-#### settings
+#### readsettings
+
+    -k, --only_keys  
+    -p, --pretty     
+    -f, --flat       
+
+If `--flat` is given results are printed as a list of `indexname/setting=value`. The default format is a sequence of
+json object, one for each index.
+
+#### writesettings
+
+    -f SETTINGS_FILE_NAME, --settings_file=SETTINGS_FILE_NAME
+
+It take a sequence of `setting=value` that will be applied to each given index. If `--settings_file` is given, the
+settings applied will be taken from this json file.
+
 #### dump
 #### delete
 #### forcemerge
+
+    -m MAX_NUM_SEGMENTS, --max_num_segments=MAX_NUM_SEGMENTS
+                          Max num segments
 
 ### cluster
 
