@@ -116,16 +116,19 @@ List of Nouns
 #### list
 #### reindex
 
-    -h, --help            show this help message and exit
     -t TEMPLATE_NAME, --use_template=TEMPLATE_NAME
-                          Template to use for reindexing
-    -v VERSION, --version=VERSION
-    -c CURRENT, --current_suffix=CURRENT
-    -s SEPARATOR, --separator=SEPARATOR
-    -b BASE_REGEX, --base_regex=BASE_REGEX
+                        Template to use for reindexing
+    -p PREFIX, --prefix=PREFIX
+    -s SUFFIX, --suffix=SUFFIX
+    -i INFIX_REGEX, --infix_regex=INFIX_REGEX
 
-Force the reindex of a index. If `--use_template`, the given template will be used for mapping, otherwise, it will use
+Force the reindex of a index. If `--use_template`, the given template will be used for mapping, otherwise, it will use the
 same than the old index. Aliases as kept from the old index.
+
+The name of the new index will be `prefix` + `infix` + `suffix`. The infix is build using a regex that will extract
+if from the reindexed index, the first group of the regex will be used. For example, for the index named
+`prefix.monitoring-es-6-2018.01.29_1` and the regex `(?:.*)(.monitoring-es-6-..........).*`, the infix will be 
+`monitoring-es-6-2018.01.29`. Prefix and suffix are taken directly from the arguments.
 
 #### readsettings
 

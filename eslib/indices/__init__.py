@@ -73,31 +73,28 @@ class IndiciesDelete(RepeterVerb):
 @command(IndiciesDispatcher, verb='reindex')
 class IndiciesReindex(RepeterVerb):
 
-    version_re = re.compile('(?P<indexseed>.*)\\.v(?P<numver>\\d+)')
-
     def fill_parser(self, parser):
         parser.add_option("-t", "--use_template", dest="template_name", help="Template to use for reindexing", default=None)
-        parser.add_option("-v", "--version", dest="version")
-        parser.add_option("-c", "--current_suffix", dest="current", default=None)
-        parser.add_option("-s", "--separator", dest="separator", default='_')
-        parser.add_option("-b", "--base_regex", dest="base_regex", default=None)
+        parser.add_option("-p", "--prefix", dest="prefix", default='')
+        parser.add_option("-s", "--suffix", dest="suffix", default='')
+        parser.add_option("-i", "--infix_regex", dest="infix_regex", default=None)
 
     def to_str(self, running, value):
         return dumps({value[0]: value[1]})
 
     @coroutine
-    def action(self, element, running, version='next', current=None, separator='_', **kwargs):
+    def action(self, element, running, prefix='', suffix='', **kwargs):
         index_name = element[0]
         index = element[1]
-        if running.base_regex is not None:
-            match = running.base_regex.match(index_name)
+        if running.infix_regex is not None:
+            match = running.infix_regex.match(index_name)
             if len(match.groups()) == 1:
-                base_name = match.group(1)
+                infix = match.group(1)
             else:
                 raise Exception('invalid matching pattern ')
         else:
-            base_name = index_name
-        new_index_name = base_name + separator + version
+            infix = index_name
+        new_index_name = prefix + infix + suffix
         v = yield from self.api.escnx.indices.exists(index=new_index_name)
         if v:
             return ('does exists')
@@ -149,9 +146,10 @@ class IndiciesReindex(RepeterVerb):
                 'actions': aliases_actions
             })
 
-        # the old index was not suffixed, destroy it and keep it's name as an alias
-        if base_name == index_name:
-            yield from self.api.escnx.indices.delete(index=index_name)
+        yield from self.api.escnx.indices.delete(index=index_name)
+
+        # the old index was not suffixed, keep it's name as an alias
+        if infix == index_name:
             yield from self.api.escnx.indices.update_aliases(body={
                 'actions': [
                     {'add': {'index': new_index_name, 'alias': index_name}}
@@ -161,7 +159,7 @@ class IndiciesReindex(RepeterVerb):
 
 
     @coroutine
-    def validate(self, running, *args, template_name=None, **kwargs):
+    def validate(self, running, *args, template_name=None, infix_regex=None, **kwargs):
         running.settings = {}
         running.mappings = None
         running.old_replica = None
@@ -177,10 +175,10 @@ class IndiciesReindex(RepeterVerb):
                 running.old_replica = old_replica
                 running.settings = settings
 
-        if kwargs.get('base_regex', None) is not None:
-            running.base_regex = re.compile(kwargs['base_regex'])
+        if infix_regex is not None:
+            running.infix_regex = re.compile(infix_regex)
         else:
-            running.base_regex = None
+            running.infix_regex = None
         return super().validate(running, *args, **kwargs)
 
 
