@@ -104,4 +104,15 @@ class TasksList(List):
 
 @command(TasksDispatcher, verb='dump')
 class IndiciesDump(DumpVerb):
-    pass
+
+    @coroutine
+    def get_elements(self, running, **kwargs):
+        tasks_dict = {}
+        for node, node_info in running.object['nodes'].items():
+            tasks = node_info['tasks']
+            for task in tasks.values():
+                id = task['id']
+                node = task['node']
+                task_key = "%s:%s" % (node, id)
+                tasks_dict[task_key] = task
+        return tasks_dict.items()
