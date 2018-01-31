@@ -7,7 +7,8 @@ It's written in python and uses a fork from the [official python SDK](https://gi
 
 More documentation about the sdk can be found at [the python sdk doc](https://elasticsearch-py.readthedocs.io/en/master/).
 
-The fork was needed to add support for asyncio (using the Python 3.4 API) and improve the exception management.
+The fork was needed to add support for asyncio (using the Python 3.4 API) and improve the exception management. The needed
+branch is on https://github.com/fbacchella/elasticsearch-py/tree/Async.
 
 Howto install in a virtualenv
 -----------------------------
