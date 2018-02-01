@@ -261,6 +261,23 @@ settings applied will be taken from this json file.
 
     -m MAX_NUM_SEGMENTS, --max_num_segments=MAX_NUM_SEGMENTS
                           Max num segments
+#### addmapping
+    -f MAPPING_FILE_NAME, --mapping_file=MAPPING_FILE_NAME
+                          The file with the added mapping
+    -t TYPE, --type=TYPE  The type to add the mapping to
+
+Used to add fields to an index.
+
+Example:
+```
+./escmd index -n .monitoring-es-6-2018.02.01 addmapping -t doc -f /dev/fd/0 << __EOF__
+{
+   "email": {
+       "type": "keyword"
+   }
+}
+__EOF__
+```
 
 ### cluster
 

@@ -2,7 +2,7 @@ from eslib.verb import DumpVerb, RepeterVerb, ReadSettings, WriteSettings
 from eslib.dispatcher import dispatcher, command, Dispatcher
 from asyncio import coroutine
 import re
-from json import dumps
+from json import dumps, load
 
 
 @dispatcher(object_name="index")
@@ -241,3 +241,26 @@ class IndiciesWriteSettings(WriteSettings, RepeterVerb):
     def action(self, element, running):
         val = yield from self.api.escnx.indices.put_settings(body=running.values, index=element[0])
         return val
+
+
+@command(IndiciesDispatcher, verb='addmapping')
+class IndiciesAddMapping(RepeterVerb):
+
+    def fill_parser(self, parser):
+        parser.add_option("-f", "--mapping_file", dest="mapping_file_name", help="The file with the added mapping", default=None)
+        parser.add_option("-t", "--type", dest="type", help="The type to add the mapping to", default='_default')
+
+    @coroutine
+    def check_verb_args(self, running, *args, mapping_file_name=None, type='_default_', **kwargs):
+        with open(mapping_file_name, "r") as mapping_file:
+            running.mapping = load(mapping_file)
+        running.type = type
+        yield from super().check_verb_args(running, *args, **kwargs)
+
+    @coroutine
+    def action(self, element, running):
+        val = yield from self.api.escnx.indices.put_mapping(index=element[0], body={"properties": running.mapping}, doc_type=running.type)
+        return val
+
+    def to_str(self, running, value):
+        return "%s -> %s" % (list(running.object.keys())[0], value.__str__())
