@@ -8,19 +8,24 @@ It's written in python and uses a fork from the [official python SDK](https://gi
 More documentation about the sdk can be found at [the python sdk doc](https://elasticsearch-py.readthedocs.io/en/master/).
 
 The fork was needed to add support for asyncio (using the Python 3.4 API) and improve the exception management. The needed
-branch is on https://github.com/fbacchella/elasticsearch-py/tree/Async.
+branch is on https://github.com/fbacchella/elasticsearch-py/tree/Async. It can be installed with:
+
+    pip install git+https://github.com/fbacchella/elasticsearch-py.git@Async
 
 Howto install in a virtualenv
 -----------------------------
 
     VENV=...
     export PYCURL_SSL_LIBRARY=..
-    virtualenv $VENV
+    virtualenv-3 $VENV
+    $VENV/bin/pip install git+https://github.com/fbacchella/elasticsearch-py.git@Async
+    git clone https://github.com/fbacchella/escmd.git
+    cd escmd
     $VENV/bin/python setup.py install
     
 On a RedHat familly distribution, the following packages are needed:
 
-    yum install python-virtualenv gcc openssl-devel libcurl-devel
+    yum install python34-virtualenv gcc openssl-devel libcurl-devel
 
 and `PYCURL_SSL_LIBRARY` must be set to `nss`. If missing, installation will not be able to detect the good ssl library used. 
 
