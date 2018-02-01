@@ -12,8 +12,12 @@ class IndiciesDispatcher(Dispatcher):
         parser.add_option("-n", "--name", dest="name", help="index filter")
 
     @coroutine
-    def get(self, name = '*', **kwargs):
-        val = yield from self.api.escnx.indices.get(index=name, **kwargs)
+    def check_noun_args(self, running, name='*'):
+        running.index_name = name
+
+    @coroutine
+    def get(self, running):
+        val = yield from self.api.escnx.indices.get(index=running.index_name)
         return val
 
 
@@ -21,7 +25,7 @@ class IndiciesDispatcher(Dispatcher):
 class IndiciesList(RepeterVerb):
 
     @coroutine
-    def action(self, element, *args, **kwargs):
+    def action(self, element, running):
         val = yield from self.api.escnx.indices.stats(index=element[0])
         return val
 
@@ -37,8 +41,13 @@ class IndiciesForceMerge(RepeterVerb):
         parser.add_option("-m", "--max_num_segments", dest="max_num_segments", help="Max num segmens", default=1)
 
     @coroutine
-    def action(self, element, *args, max_num_segments=False, **kwargs):
-        val = yield from self.api.escnx.indices.forcemerge(element[0], max_num_segments=max_num_segments, flush=True)
+    def check_verb_args(self, running, *args, max_num_segments=1, **kwargs):
+        running.max_num_segments = max_num_segments
+        yield from super().check_verb_args(running, *args, **kwargs)
+
+    @coroutine
+    def action(self, element, running):
+        val = yield from self.api.escnx.indices.forcemerge(element[0], max_num_segments=running.max_num_segments, flush=True)
         return val
 
     def to_str(self, running, value):
@@ -49,22 +58,14 @@ class IndiciesForceMerge(RepeterVerb):
 class IndiciesDelete(RepeterVerb):
 
     @coroutine
-    def get(self, name = None):
-        if name == None:
-            return '*'
-        val = yield from self.api.escnx.indices.get(index=name)
-        return val
-
-    @coroutine
     def action(self, element, *args, **kwargs):
         val = yield from self.api.escnx.indices.delete(index=element[0])
         return val
 
     @coroutine
-    def validate(self, running, *args, **kwargs):
-        if running.object == '*':
-            return False
-        return running.object is not None
+    def check_verb_args(self, running, ):
+        if running.index_name == '*':
+            raise Exception("won't destroy everything, -n/--name mandatory")
 
     def to_str(self, running, value):
         return "%s -> %s" % (list(running.object.keys())[0], value.__str__())
@@ -79,11 +80,33 @@ class IndiciesReindex(RepeterVerb):
         parser.add_option("-s", "--suffix", dest="suffix", default='')
         parser.add_option("-i", "--infix_regex", dest="infix_regex", default=None)
 
-    def to_str(self, running, value):
-        return dumps({value[0]: value[1]})
+    @coroutine
+    def check_verb_args(self, running, *args, template_name=None, infix_regex=None, prefix='', suffix='', **kwargs):
+        running.settings = {}
+        running.mappings = None
+        running.old_replica = None
+        if template_name is not None:
+            templates = yield from self.api.escnx.indices.get_template(name=template_name)
+            if template_name in templates:
+                template = templates[template_name]
+                settings = template['settings']
+                mappings = template['mappings']
+                old_replica = settings.get('index', {}).get('number_of_replicas', None)
+                settings['index']['number_of_replicas'] = 0
+                running.mappings = mappings
+                running.old_replica = old_replica
+                running.settings = settings
+
+        if infix_regex is not None:
+            running.infix_regex = re.compile(infix_regex)
+        else:
+            running.infix_regex = None
+        running.prefix = prefix
+        running.suffix = suffix
+        return super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
-    def action(self, element, running, prefix='', suffix='', **kwargs):
+    def action(self, element, running):
         index_name = element[0]
         index = element[1]
         if running.infix_regex is not None:
@@ -94,10 +117,10 @@ class IndiciesReindex(RepeterVerb):
                 raise Exception('invalid matching pattern ')
         else:
             infix = index_name
-        new_index_name = prefix + infix + suffix
+        new_index_name = running.prefix + infix + running.suffix
         v = yield from self.api.escnx.indices.exists(index=new_index_name)
         if v:
-            return ('does exists')
+            return (new_index_name, 'does exists')
         if running.mappings is None:
             print("reusing mapping")
             mappings = index['mappings']
@@ -155,31 +178,11 @@ class IndiciesReindex(RepeterVerb):
                     {'add': {'index': new_index_name, 'alias': index_name}}
                 ]
             })
+        yield from self.api.escnx.indices.forcemerge(element[0], max_num_segments=1, flush=True)
         return (index_name, reindex_status)
 
-
-    @coroutine
-    def validate(self, running, *args, template_name=None, infix_regex=None, **kwargs):
-        running.settings = {}
-        running.mappings = None
-        running.old_replica = None
-        if template_name is not None:
-            templates = yield from self.api.escnx.indices.get_template(name=template_name)
-            if template_name in templates:
-                template = templates[template_name]
-                settings = template['settings']
-                mappings = template['mappings']
-                old_replica = settings.get('index', {}).get('number_of_replicas', None)
-                settings['index']['number_of_replicas'] = 0
-                running.mappings = mappings
-                running.old_replica = old_replica
-                running.settings = settings
-
-        if infix_regex is not None:
-            running.infix_regex = re.compile(infix_regex)
-        else:
-            running.infix_regex = None
-        return super().validate(running, *args, **kwargs)
+    def to_str(self, running, value):
+        return dumps({value[0]: value[1]})
 
 
 @command(IndiciesDispatcher, verb='dump')
@@ -191,15 +194,15 @@ class IndiciesDump(DumpVerb):
 class IndiciesReadSettings(ReadSettings):
 
     @coroutine
-    def get(self, **object_options):
-        val = yield from self.api.escnx.cat.indices(index=object_options.get('name', '*'), format='json', h='index')
+    def get(self, running):
+        val = yield from self.api.escnx.cat.indices(index=running.index_name, format='json', h='index')
         return val
 
     @coroutine
-    def get_elements(self, running, **kwargs):
+    def get_elements(self, running):
         indices = []
         for i in running.object:
-            index_entry = yield from self.dispatcher.get(name=i['index'], include_defaults=True, flat_settings=running.flat)
+            index_entry = yield from self.api.escnx.indices.get(index=i['index'], include_defaults=True, flat_settings=running.flat)
             index_name, index_data = next(iter(index_entry.items()))
             if running.flat:
                 #print(index_data['settings'])
@@ -223,18 +226,18 @@ class IndiciesReadSettings(ReadSettings):
 class IndiciesWriteSettings(WriteSettings, RepeterVerb):
 
     @coroutine
-    def get(self, **object_options):
-        val = yield from self.api.escnx.cat.indices(index=object_options.get('name', '*'), format='json', h='index')
+    def get(self, running):
+        val = yield from self.api.escnx.cat.indices(index=running.index_name, format='json', h='index')
         return val
 
     @coroutine
-    def get_elements(self, running, **kwargs):
+    def get_elements(self, running):
         index_names = []
         for i in running.object:
             index_names.append((i['index'], None))
         return index_names
 
     @coroutine
-    def action(self, element, running, *args, **kwargs):
+    def action(self, element, running):
         val = yield from self.api.escnx.indices.put_settings(body=running.values, index=element[0])
         return val

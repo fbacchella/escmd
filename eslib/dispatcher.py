@@ -37,7 +37,11 @@ class Dispatcher(object):
         raise NotImplementedError
 
     @coroutine
-    def get(self, **object_options):
+    def check_noun_args(self, running, **kwargs):
+        raise NotImplementedError
+
+    @coroutine
+    def get(self, running):
         raise NotImplementedError
 
     def get_cmd(self, verb):
@@ -48,27 +52,29 @@ class Dispatcher(object):
         else:
             return None
 
+    def clean_options(self, options):
+        """
+        transform options to a dict and removed undeclared arguments or empty enumerations but keep empty string
+        :param options:
+        :return:
+        """
+        return {k: v for k, v in list(vars(options).items())
+                        if v is not None and (isinstance(v, str) or not hasattr(v, '__len__') or len(v) != 0)}
+
     def run_phrase(self, verb, object_options={}, object_args=[]):
         cmd = self.get_cmd(verb)
+        running = Running(cmd)
         if cmd is None:
             raise ESLibError("unknown verb %s" % verb)
-        object = yield from cmd.get(**object_options)
-        running = Running(cmd, object)
         try:
             (verb_options, verb_args) = cmd.parse(object_args)
         except SystemExit:
             return None
-        #try:
-        validated = yield from cmd.validate(running, *verb_args, **vars(verb_options))
-        if not validated:
-            raise ESLibError("validation failed")
-        #except TypeError:
-        #    raise ESLibError("validation failed")
-        # transform options to a dict and removed undeclared arguments or empty enumerations
-        # but keep empty string
-        verb_options = {k: v for k, v in list(vars(verb_options).items())
-                        if v is not None and (isinstance(v, str) or not hasattr(v, '__len__') or len(v) != 0)}
-        running.result = yield from cmd.execute(running, *verb_args, **verb_options)
+        verb_options = self.clean_options(verb_options)
+        yield from cmd.check_noun_args(running, **object_options)
+        yield from cmd.check_verb_args(running, *verb_args, **verb_options)
+        running.object = yield from cmd.get(running)
+        running.result = yield from cmd.execute(running)
         return running
 
 

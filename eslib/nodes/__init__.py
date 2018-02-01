@@ -8,11 +8,15 @@ from eslib.dispatcher import dispatcher, command, Dispatcher
 class NodesDispatcher(Dispatcher):
 
     def fill_parser(self, parser):
-        parser.add_option("-n", "--nodes", dest="nodes", help="nodes filter")
+        parser.add_option("-n", "--node", dest="node_name", help="nodes filter")
 
     @coroutine
-    def get(self, nodes=None):
-        nodes = yield from self.api.escnx.nodes.info(nodes)
+    def check_noun_args(self, running, node_name=None):
+        running.node_name = node_name
+
+    @coroutine
+    def get(self, running):
+        nodes = yield from self.api.escnx.nodes.info(running.node_name)
         return nodes['nodes']
 
 

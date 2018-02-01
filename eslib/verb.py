@@ -28,6 +28,30 @@ class Verb(object):
         (verb_options, verb_args) = parser.parse_args(args)
         return (verb_options, verb_args)
 
+    @coroutine
+    def check_noun_args(self, running, **kwargs):
+        """
+        Check and eventually parse the argument given to the noun.
+        Default to delegate that action to the dispatcher
+        :param running: where to store the running context
+        :param kwargs:
+        :return:
+        """
+        yield from self.dispatcher.check_noun_args(running, **kwargs)
+
+    @coroutine
+    def check_verb_args(self, running, *args, **kwargs):
+        pass
+
+    @coroutine
+    def get(self, running):
+        val = yield from self.dispatcher.get(running)
+        return val
+
+    @coroutine
+    def execute(self, running):
+        raise NotImplementedError
+
     def to_str(self, running, value):
         if value is True:
             return "success"
@@ -39,19 +63,6 @@ class Verb(object):
         else:
             return str(value)
 
-    @coroutine
-    def validate(self, running, *args, **kwargs):
-        return running.object is not None
-
-    @coroutine
-    def get(self, **object_options):
-        val = yield from self.dispatcher.get(**object_options)
-        return val
-
-    @coroutine
-    def execute(self, running, *args, **kwargs):
-        raise NotImplementedError
-
     def status(self):
         """A default status command to run on success"""
         return 0;
@@ -61,7 +72,7 @@ class RepeterVerb(Verb):
     @coroutine
     def execute(self, running, *args, **kwargs):
         try:
-            elements = yield from self.get_elements(running, **kwargs)
+            elements = yield from self.get_elements(running)
         except Exception as ex:
             # ex needs to be passed as argument, because of the 'yield from' magic,
             # it's not defined when defining the function
@@ -71,7 +82,7 @@ class RepeterVerb(Verb):
             return enumerator(ex)
         coros = []
         for e in elements:
-            task = ensure_future(self.action(e, running, args_vector=args, **kwargs))
+            task = ensure_future(self.action(e, running))
             coros.append(task)
         if len(coros) > 0:
             done, pending = yield from wait(coros)
@@ -89,11 +100,11 @@ class RepeterVerb(Verb):
             return None
 
     @coroutine
-    def action(self, **kwargs):
+    def action(self, running):
         raise NotImplementedError
 
     @coroutine
-    def get_elements(self, running, **kwargs):
+    def get_elements(self, running):
         return running.object.items()
 
 
@@ -104,14 +115,14 @@ class DumpVerb(RepeterVerb):
         parser.add_option("-p", "--pretty", dest="pretty", default=False, action='store_true')
 
     @coroutine
-    def validate(self, running, *args, pretty=False, only_keys=False, **kwargs):
+    def check_verb_args(self, running, *args, pretty=False, only_keys=False, **kwargs):
         if pretty:
             running.formatting = {'indent': 2, 'sort_keys': True}
         else:
             running.formatting = {}
         running.only_keys = only_keys
         running.args_vector = args
-        return super().validate(running, **kwargs)
+        yield from super().check_verb_args(running, **kwargs)
 
     @coroutine
     def action(self, element, running, *args, only_keys=False, **kwargs):
@@ -139,15 +150,14 @@ class List(RepeterVerb):
     template = "{name!s} {id!s}"
 
     @coroutine
-    def validate(self, running, template=None):
+    def check_verb_args(self, running, *args, template=None, **kwargs):
         running.template = template
-        return True
+        super().check_verb_args(*args, **kwargs)
 
     def fill_parser(self, parser):
         super(List, self).fill_parser(parser)
-        parser.add_option("-t", "--template", dest="template", help="template for output formatting, default to %s" % self.template)
 
-    def execute(self, running, template=None):
+    def execute(self, running):
         val = yield from self.get_elements(running)
         def enumerator():
             for i in val:
@@ -189,13 +199,13 @@ class ReadSettings(DumpVerb):
         raise NotImplementedError
 
     @coroutine
-    def validate(self, running, *args, flat=False, **kwargs):
-        running.settings = []
+    def check_verb_args(self, running, *args, flat=False, **kwargs):
         running.flat = flat
+        running.settings = []
         for i in args:
             setting_path = i.split('.')
             running.settings.append(setting_path)
-        return super().validate(running, **kwargs)
+        return super().check_verb_args(running, **kwargs)
 
     @coroutine
     def action(self, element, running, *args, only_keys=False, **kwargs):
@@ -243,23 +253,20 @@ class WriteSettings(Verb):
         parser.add_option('-f', '--settings_file', dest='settings_file_name', default=None)
 
     @coroutine
-    def get(self):
-        return True
+    def get(self, running):
+        return None
 
     @coroutine
-    def validate(self, running, *args, settings_file_name=None, **kwargs):
+    def check_verb_args(self, running, *args, settings_file_name=None, **kwargs):
         values = {}
         if settings_file_name is not None:
             with open(settings_file_name, "r") as settings_file:
                 values = json.load(settings_file)
-        try:
-            for i in args:
-                k, v = next(iter(WriteSettings.keyvalue_re.finditer(i))).groups()
-                self._dict_merge(values, self._path_to_dict(k, v))
-        except Exception as e:
-            return False
+        for i in args:
+            k, v = next(iter(WriteSettings.keyvalue_re.finditer(i))).groups()
+            self._dict_merge(values, self._path_to_dict(k, v))
         running.values = values
-        return True
+        super().check_verb_args(running, **kwargs)
 
     def _path_to_dict(self, path, value, current_dict = {}):
         current_key, next_path = next(WriteSettings.keydepth_re.finditer(path)).groups()

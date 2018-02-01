@@ -9,10 +9,15 @@ import time
 class TasksDispatcher(Dispatcher):
 
     def fill_parser(self, parser):
-        parser.add_option("-i", "--id", dest="name", help="tasks filter")
+        parser.add_option("-i", "--id", dest="task_id", help="tasks filter")
 
-    def get(self, name=None):
-        val = yield from self.api.escnx.tasks.get(task_id=name)
+    @coroutine
+    def check_noun_args(self, running, task_id=None):
+        running.task_id = task_id
+
+    @coroutine
+    def get(self, running):
+        val = yield from self.api.escnx.tasks.get(task_id=running.task_id)
         return val
 
 
@@ -26,14 +31,14 @@ class TreeNode(object):
 
     def __repr__(self, level=-1):
         if self.value is not None:
-            ret = "    "*level+self._value_to_str()+"\n"
+            ret = "    "*level+self._value_to_str(level)+"\n"
         else:
             ret = ''
         for child in self.children:
             ret += child.__repr__(level+1)
         return ret
 
-    def _value_to_str(self):
+    def _value_to_str(self, level):
         node_name = self.value.get('node_name', '')
         node_id = self.value.get('node', '')
         running_time_in_nanos = int(self.value.get('running_time_in_nanos', -1))
@@ -41,12 +46,12 @@ class TreeNode(object):
         action = self.value.get('action', '')
         id = self.value.get('id', '')
         running_time = datetime.timedelta(seconds=running_time_in_nanos / 1e9)
-        start_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_time_in_millis / 1000))
-        return "%s/%s:%-8s %-30s %s %s" % (node_name, node_id, id, action, running_time, start_time)
+        start_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(round(start_time_in_millis / 1000, 0)))
+        return "%s:%-*s %-30s %s %s %s" % (node_id, 15-level*4, id, action, node_name, running_time, start_time)
 
 
-@command(TasksDispatcher)
-class TasksList(List):
+@command(TasksDispatcher, verb='list')
+class TasksList(Verb):
 
     def fill_parser(self, parser):
         super().fill_parser(parser)
@@ -54,18 +59,23 @@ class TasksList(List):
         parser.add_option("-g", "--group_by", dest="group_by", default='nodes')
 
     @coroutine
-    def get(self, name=None):
-        return None
+    def check_verb_args(self, running, *args, actions='', group_by='nodes', **kwargs):
+        running.group_by = group_by
+        running.actions = actions
+        yield from super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
-    def execute(self, running, *args, **kwargs):
-        val = yield from super().execute(running)
+    def get(self, running):
+        val = yield from self.api.escnx.tasks.list(actions=running.actions, group_by=running.group_by)
+        return val
+
+    @coroutine
+    def execute(self, running):
         tree = TreeNode(None)
         nodes = { '' : tree }
         try_parent = { '' : None }
         task_infos = {}
-        for value in val:
-            node, node_info = value
+        for node, node_info in running.object['nodes'].items():
             node_name = node_info['name']
             tasks = node_info['tasks']
             for task in tasks.values():
@@ -87,23 +97,18 @@ class TasksList(List):
             try_parent = next_try_parent
         return tree
 
-    @coroutine
-    def validate(self, running, *args, actions='', group_by='nodes', **kwargs):
-        val = yield from self.api.escnx.tasks.list(actions=actions, group_by=group_by)
-        running.object = val
-        running.group_by = group_by
-        return True
-
-    @coroutine
-    def get_elements(self, running, **kwargs):
-        return running.object['nodes'].items()
-
     def to_str(self, running, value):
         return '%s' % value
 
 
 @command(TasksDispatcher, verb='dump')
 class IndiciesDump(DumpVerb):
+
+    @coroutine
+    def check_verb_args(self, running, *args, actions='', group_by='nodes', **kwargs):
+        running.group_by = group_by
+        running.actions = actions
+        yield from super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
     def get_elements(self, running, **kwargs):

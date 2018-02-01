@@ -1,23 +1,26 @@
 from asyncio import coroutine
 
 from eslib.dispatcher import dispatcher, command, Dispatcher
-from eslib.verb import DumpVerb, Verb, ReadSettings, WriteSettings
+from eslib.verb import ReadSettings, WriteSettings
 
 
 @dispatcher(object_name="cluster")
 class ClusterDispatcher(Dispatcher):
-    pass
+
+    @coroutine
+    def check_noun_args(self, running):
+        pass
 
 
 @command(ClusterDispatcher, verb='readsettings')
 class ClusterReadSettings(ReadSettings):
 
     @coroutine
-    def get(self):
-        return True
+    def get(self, running):
+        return None
 
     @coroutine
-    def get_elements(self, running, **kwargs):
+    def get_elements(self, running):
         val = yield from self.api.escnx.cluster.get_settings(include_defaults=True, flat_settings=running.flat)
         return val.items()
 
@@ -38,12 +41,12 @@ class ClusterWriteSettings(WriteSettings):
         return super().fill_parser(parser)
 
     @coroutine
-    def validate(self, running, *args, persistent=False, transient= True, **kwargs):
+    def check_verb_args(self, running, *args, persistent=False, transient=True, **kwargs):
         running.destination = 'persistent' if persistent else 'transient'
-        return super().validate(running, *args,**kwargs)
+        yield from super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
-    def execute(self, running, *args, **kwargs):
+    def execute(self, running):
         values = running.values
         val = yield from self.api.escnx.cluster.put_settings(body={running.destination: values})
         return val

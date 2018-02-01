@@ -8,10 +8,14 @@ from asyncio import coroutine
 class TemplatesDispatcher(Dispatcher):
 
     def fill_parser(self, parser):
-        parser.add_option("-n", "--name", dest="name", help="nodes filter")
+        parser.add_option("-n", "--name", dest="template_name", help="nodes filter")
 
-    def get(self, name = '*'):
-        val = yield from self.api.escnx.indices.get_template(name=name)
+    @coroutine
+    def check_noun_args(self, running, template_name=None):
+        running.template_name = template_name
+
+    def get(self, running):
+        val = yield from self.api.escnx.indices.get_template(name=running.template_name)
         return val
 
 
@@ -32,27 +36,18 @@ class TemplatesPut(Verb):
         parser.add_option("-f", "--template_file", dest="template_file_name", default=None)
 
     @coroutine
-    def get(self, name = None):
-        if name is None:
-            return False
-        val = yield from self.api.escnx.indices.exists_template(name=name)
-        if not val:
-            return name
-        else:
-            return None
-
-    @coroutine
-    def validate(self, running, *args, **kwargs):
-        print(vars(running))
-        print(args)
-        print(kwargs)
-        return running.object is not None
-
-    @coroutine
-    def execute(self, running, template_file_name):
+    def check_verb_args(self, running, *args, template_file_name=None, **kwargs):
         with open(template_file_name, "r") as template_file:
-            template = json.load(template_file)
-        val = yield from self.api.escnx.indices.put_template(name=running.object, body=template)
+            running.template = json.load(template_file)
+        yield from super().check_verb_args(running, *args, **kwargs)
+
+    @coroutine
+    def get(self, running):
+        return None
+
+    @coroutine
+    def execute(self, running):
+        val = yield from self.api.escnx.indices.put_template(name=running.template_name, body=running.template)
         return val
 
     def to_str(self, running, value):
