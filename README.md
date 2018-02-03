@@ -18,10 +18,13 @@ Howto install in a virtualenv
     VENV=...
     export PYCURL_SSL_LIBRARY=..
     virtualenv-3 $VENV
-    $VENV/bin/pip install git+https://github.com/fbacchella/elasticsearch-py.git@Async
     git clone https://github.com/fbacchella/escmd.git
     cd escmd
     $VENV/bin/python setup.py install
+    
+or
+
+    $VENV/bin/pip install --process-dependency-links .
     
 On a RedHat familly distribution, the following packages are needed:
 

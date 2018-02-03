@@ -9,9 +9,8 @@ def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 install_requires = [
-    'elasticsearch == 2.4.1',
-    'elasticsearch-dsl == 2.2.0',
-    'PycURL'
+    'elasticsearch==6.1.1',
+    'PycURL==7.43.0.1'
     ]
 
 if sys.version_info < (3,):
@@ -26,6 +25,7 @@ setup(
     license = "Apache",
     keywords = "CLI Elasticsearch",
     install_requires = install_requires,
+    dependency_links = ["git+https://github.com/fbacchella/elasticsearch-py.git@Async#egg=elasticsearch-6.1.1"],
     url = "https://github.com/fbacchella/eslib",
     packages=find_packages(),
     entry_points={
