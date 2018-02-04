@@ -13,14 +13,11 @@ install_requires = [
     'PycURL==7.43.0.1'
     ]
 
-if sys.version_info < (3,):
-    install_requires += ['configparser']
-
 setup(
     name = "EsCmd",
     version = "0.1",
     author = "Fabrice Bacchella",
-    author_email = "fabrice.bacchella@3ds.com",
+    author_email = "fabrice.bacchella@orange.fr",
     description = "Command line tool to manage ElasticSearch.",
     license = "Apache",
     keywords = "CLI Elasticsearch",
@@ -42,8 +39,12 @@ setup(
         "License :: OSI Approved :: Apache Software License",
         "Classifier: Operating System :: OS Independent",
         "Environment :: Console",
-        "Programming Language :: Python :: 2",
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.4",
+        "Programming Language :: Python :: 3.5",
+        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: Implementation :: CPython",
+        "Programming Language :: Python :: Implementation :: PyPy",
     ],
     platforms=["Posix", "MacOS X"],
     test_suite='tests',
