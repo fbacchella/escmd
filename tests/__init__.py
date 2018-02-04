@@ -52,7 +52,6 @@ class DispatchersTestCase(unittest.TestCase):
 
         try:
             done, pending = loop.run_until_complete(looper())
-            print(done, pending)
             # done contain either a result/exception from run_phrase or an exception from multi_handle.perform()
             # In both case, the first result is sufficient
             for i in done:
