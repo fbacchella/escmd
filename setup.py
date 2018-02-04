@@ -46,4 +46,5 @@ setup(
         "Programming Language :: Python :: 3",
     ],
     platforms=["Posix", "MacOS X"],
+    test_suite='tests',
 )
