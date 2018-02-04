@@ -11,7 +11,6 @@ class DispatchersTestCase(unittest.TestCase):
         self.assertTrue('cluster' in eslib.dispatchers)
         self.assertTrue('index' in eslib.dispatchers)
         self.assertTrue('node' in eslib.dispatchers)
-        self.assertTrue('shard' in eslib.dispatchers)
         self.assertTrue('task' in eslib.dispatchers)
         self.assertTrue('template' in eslib.dispatchers)
 
