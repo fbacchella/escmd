@@ -307,6 +307,10 @@ class PyCyrlConnection(Connection):
         else:
             self.use_ssl = False
         self.kerberos = kerberos
+        if isinstance(http_auth, tuple):
+            self.http_auth = ':'.join(http_auth)
+        else:
+            self.http_auth = http_auth
         self.user_agent = user_agent
         if debug:
             self.debug = True
@@ -353,6 +357,9 @@ class PyCyrlConnection(Connection):
                 pycurl.HTTPAUTH: pycurl.HTTPAUTH_NEGOTIATE,
                 pycurl.USERPWD: ':'
             })
+        elif self.http_auth is not None:
+            print('http_auth', self.http_auth)
+            settings[pycurl.USERPWD] = self.http_auth
 
         # Debug setup
         if self.debug:

@@ -132,12 +132,17 @@ class Context(object):
                 'user_agent': self.api_connect_settings['user_agent'],
             })
 
+        if self.api_connect_settings['username'] is not None and self.api_connect_settings['password'] is not None:
+            http_auth = (self.api_connect_settings['username'], self.api_connect_settings['password'])
+        else:
+            http_auth = None
         self.escnx = Elasticsearch(self.api_connect_settings['url'],
                                    transport_class=AsyncTransport,
                                    connection_class=PyCyrlConnection,
                                    verify_certs=self.api_connect_settings['verify_certs'],
                                    ca_certs=self.api_connect_settings['ca_file'],
                                    kerberos=self.api_connect_settings['kerberos'],
+                                   http_auth=http_auth,
                                    **cnxprops)
         self.escnx.ping()
 
