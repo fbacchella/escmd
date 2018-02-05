@@ -358,7 +358,6 @@ class PyCyrlConnection(Connection):
                 pycurl.USERPWD: ':'
             })
         elif self.http_auth is not None:
-            print('http_auth', self.http_auth)
             settings[pycurl.USERPWD] = self.http_auth
 
         # Debug setup
