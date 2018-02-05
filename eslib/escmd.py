@@ -42,10 +42,12 @@ def filter_result(cmd, running, result):
         # It returned nothing, it should be OK.
         return 0
 
+
 def print_result(running):
     cmd = running.cmd
     result = running.result
     return filter_result(cmd, running, result)
+
 
 def print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
     loop = get_event_loop()
