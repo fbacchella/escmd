@@ -70,7 +70,7 @@ class DispatchersTestCase(unittest.TestCase):
             self.assertIsInstance(v, dict)
             self.assertTrue(k in settings_keys)
             if len(v) == 1:
-                self.assertEqual(next(running.cmd.to_str(running, j)), 'docker-cluster')
+                self.assertRegex(next(running.cmd.to_str(running, j)), '[a-z-]+')
             for l in v.values():
                 self.assertNotIsInstance(l, dict)
         self.action_read_settings(dispatcher, ['-f', 'cluster.name'], tester)
@@ -111,6 +111,8 @@ class DispatchersTestCase(unittest.TestCase):
         ctx.connect()
         dispatcher.api = ctx
         for i in self._run_action(dispatcher, 'readsettings', object_args=object_args):
+            if i.result is None:
+                continue
             for j in i.result:
                 tester(i, j)
 
