@@ -200,48 +200,40 @@ class ReadSettings(DumpVerb):
 
     @coroutine
     def check_verb_args(self, running, *args, flat=False, **kwargs):
-        running.flat = flat
-        running.settings = []
+        running.flat = flat if len(args) == 0 else True
+        running.settings = set()
         for i in args:
-            setting_path = i.split('.')
-            running.settings.append(setting_path)
+            running.settings.add(i)
         return super().check_verb_args(running, **kwargs)
 
     @coroutine
     def action(self, element, running, *args, only_keys=False, **kwargs):
-        values = []
         if len(running.settings) > 0:
-            for i in running.settings:
-                curs = {element[0]: element[1]}
-                for j in i:
-                    if not isinstance(curs, dict) or curs is None:
-                        break
-                    curs = curs.get(j, None)
-                if curs is not None:
-                    if only_keys and isinstance(curs, dict):
-                        values.append({'.'.join(i): curs.keys()})
-                    else:
-                        values.append({'.'.join(i): curs})
+            new_settings = {}
+            for k,v in element[1].items():
+                if k in running.settings:
+                    new_settings[k] = v
+            return (element[0], new_settings)
         else:
-            values.append({element[0]: element[1]})
-        return values
+            return (element[0], element[1])
 
     def to_str(self, running, item):
-        if len(item) == 0:
+        __, settings = item
+        if len(settings) == 0:
             yield None
+        elif len(settings) == 1 and running.flat:
+            yield next(iter(settings.values()))
         else:
-            for i in item:
-                (k, v) = next(iter(i.items()))
-                if running.flat:
-                    for (sk, sv) in v.items():
-                        yield "%s=%s" % (sk, sv)
-                    return
-                elif not isinstance(v, str):
-                    if running.only_keys:
-                        v = json.dumps(list(v.keys()), **running.formatting)
-                    else:
-                        v = json.dumps(v, **running.formatting)
-                    yield '{"%s": %s}' % (k, v)
+            if running.flat:
+                for (k, v) in settings.items():
+                    if running.flat:
+                        yield "%s=%s" % (k, v)
+            else:
+                if running.only_keys:
+                    v = json.dumps(list(settings.keys()), **running.formatting)
+                else:
+                    v = json.dumps(settings, **running.formatting)
+                yield str(v)
 
 
 class WriteSettings(Verb):

@@ -28,7 +28,8 @@ class DispatchersTestCase(unittest.TestCase):
             except SystemExit:
                 pass
             for verb_name, verb_class in dispatch.verbs.items():
-                self.assertIsNone(self._run_action(dispatch, verb_name, object_args=['-h']))
+                for i in self._run_action(dispatch, verb_name, object_args=['-h']):
+                    self.assertIsNone(i)
 
     def test_list_verb(self):
         ctx = context.Context(url='localhost:9200', sniff=False)
@@ -37,6 +38,81 @@ class DispatchersTestCase(unittest.TestCase):
             dispatcher = eslib.dispatchers[i]()
             dispatcher.api = ctx
             self.assertIsNotNone(self._run_action(dispatcher, 'list'))
+
+    def test_read_settings_cluster_json(self):
+        dispatcher = eslib.dispatchers['cluster']()
+        settings_keys = ['persistent', 'transient', 'defaults']
+        def tester(running, j):
+            self.assertIsInstance(j, tuple)
+            k,v = j
+            self.assertIsInstance(v, dict)
+            self.assertTrue(k in settings_keys)
+        self.action_read_settings(dispatcher, [], tester)
+
+    def test_read_settings_cluster_flat(self):
+        dispatcher = eslib.dispatchers['cluster']()
+        settings_keys = ['persistent', 'transient', 'defaults']
+        def tester(running, j):
+            self.assertIsInstance(j, tuple)
+            k, v = j
+            self.assertIsInstance(v, dict)
+            self.assertTrue(k in settings_keys)
+            for l in v.values():
+                self.assertNotIsInstance(l, dict)
+        self.action_read_settings(dispatcher, ['-f'], tester)
+
+    def test_read_settings_cluster_flat_single(self):
+        dispatcher = eslib.dispatchers['cluster']()
+        settings_keys = ['persistent', 'transient', 'defaults']
+        def tester(running, j):
+            self.assertIsInstance(j, tuple)
+            k, v = j
+            self.assertIsInstance(v, dict)
+            self.assertTrue(k in settings_keys)
+            if len(v) == 1:
+                self.assertEqual(next(running.cmd.to_str(running, j)), 'docker-cluster')
+            for l in v.values():
+                self.assertNotIsInstance(l, dict)
+        self.action_read_settings(dispatcher, ['-f', 'cluster.name'], tester)
+
+    def test_read_settings_index_json(self):
+        dispatcher = eslib.dispatchers['index']()
+        def tester(running, j):
+            self.assertIsInstance(j, tuple)
+            k,v = j
+            self.assertIsInstance(v, dict)
+        self.action_read_settings(dispatcher, [], tester)
+
+    def test_read_settings_index_flat(self):
+        dispatcher = eslib.dispatchers['index']()
+        def tester(running, j):
+            self.assertIsInstance(j, tuple)
+            k, v = j
+            self.assertIsInstance(v, dict)
+            for l in v.values():
+                self.assertNotIsInstance(l, dict)
+        self.action_read_settings(dispatcher, ['-f'], tester)
+
+    def test_read_settings_index_flat_single(self):
+        dispatcher = eslib.dispatchers['index']()
+        settings_keys = ['persistent', 'transient', 'defaults']
+        def tester(running, j):
+            self.assertIsInstance(j, tuple)
+            k, v = j
+            self.assertIsInstance(v, dict)
+            if len(v) == 1:
+                self.assertEqual(next(running.cmd.to_str(running, j)), '1')
+            for l in v.values():
+                self.assertNotIsInstance(l, dict)
+        self.action_read_settings(dispatcher, ['-f', 'number_of_replicas'], tester)
+
+    def action_read_settings(self, dispatcher, object_args, tester):
+        ctx = context.Context(url='localhost:9200', sniff=False)
+        ctx.connect()
+        dispatcher.api = ctx
+        for i in self._run_action(dispatcher, 'readsettings', object_args=object_args):
+            for j in i.result:
+                tester(i, j)
 
     def _run_action(self, dispatcher, verb, object_options={}, object_args=[]):
         loop = asyncio.get_event_loop()
@@ -54,10 +130,7 @@ class DispatchersTestCase(unittest.TestCase):
             # done contain either a result/exception from run_phrase or an exception from multi_handle.perform()
             # In both case, the first result is sufficient
             for i in done:
-                running = i.result()
-                # If running is None, run_phrase excited with sys.exit, because of argparse
-                if running is not None:
-                    return running
+                yield i.result()
         except KeyboardInterrupt:
             pass
         finally:

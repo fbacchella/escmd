@@ -205,20 +205,25 @@ class IndiciesReadSettings(ReadSettings):
             index_entry = yield from self.api.escnx.indices.get(index=i['index'], include_defaults=True, flat_settings=running.flat)
             index_name, index_data = next(iter(index_entry.items()))
             if running.flat:
-                #print(index_data['settings'])
-                indices.append((index_name, index_data['settings']))
+                # remove 'index.' at the beginning of settings names
+                new_settings = {}
+                for k,v in index_data['settings'].items():
+                    new_settings[k.replace('index.', '')] = v
+                indices.append((index_name, new_settings))
             else:
                 indices.append((index_name, index_data['settings']['index']))
         return indices
 
     def to_str(self, running, item):
-        if running.flat:
-            # remove 'index.' at the beginning of settings names
-            k,v = next(iter(item[0].items()))
-            #yield k
-            v = {i.replace('index.', '%s/' % k): j for i,j in v.items()}
-            return super().to_str(running, ({k: v},))
-        elif isinstance(item, list):
+        if len(running.object) > 1:
+            if running.flat:
+                k,v = item
+                v = {"%s/%s" % (k, i): j for i,j in v.items()}
+                return super().to_str(running, (k, v))
+            else:
+                k, v = item
+                return super().to_str(running, ('', {k: v}))
+        else:
             return super().to_str(running, item)
 
 
