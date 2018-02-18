@@ -282,8 +282,8 @@ class ReadSettings(DumpVerb):
 
 class WriteSettings(Verb):
 
-    keyvalue_re = re.compile(r'(^[a-z0-9_\.]+)=(.*)$')
-    keydepth_re = re.compile(r'^([a-z0-9_]+)(?:\.(.*))?$')
+    keyvalue_re = re.compile(r'^([-a-z0-9_\.]+)=(.*)$')
+    keydepth_re = re.compile(r'^([-a-z0-9_]+)(?:\.(.*))?$')
 
     def fill_parser(self, parser):
         parser.add_option('-f', '--settings_file', dest='settings_file_name', default=None)
@@ -299,8 +299,14 @@ class WriteSettings(Verb):
             with open(settings_file_name, "r") as settings_file:
                 values = json.load(settings_file)
         for i in args:
-            k, v = next(iter(WriteSettings.keyvalue_re.finditer(i))).groups()
-            self._dict_merge(values, self._path_to_dict(k, v))
+            try:
+                k, v = next(iter(WriteSettings.keyvalue_re.finditer(i))).groups()
+                failed = False
+            except StopIteration:
+                failed = True
+        if failed:
+            raise Exception('invalid key ' + i)
+        self._dict_merge(values, self._path_to_dict(k, v))
         running.values = values
         super().check_verb_args(running, **kwargs)
 
