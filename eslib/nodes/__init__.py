@@ -1,6 +1,6 @@
 from asyncio import coroutine
 
-from eslib.verb import List, DumpVerb
+from eslib.verb import List, DumpVerb, CatVerb
 from eslib.dispatcher import dispatcher, command, Dispatcher
 
 
@@ -32,3 +32,10 @@ class NodesList(List):
 @command(NodesDispatcher, verb='dump')
 class NodesDump(DumpVerb):
     pass
+
+
+@command(NodesDispatcher)
+class PluginsCat(CatVerb):
+
+    def get_source(self):
+        return self.api.escnx.cat.nodes

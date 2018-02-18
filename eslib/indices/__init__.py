@@ -1,4 +1,4 @@
-from eslib.verb import DumpVerb, RepeterVerb, ReadSettings, WriteSettings
+from eslib.verb import Verb, DumpVerb, RepeterVerb, ReadSettings, WriteSettings, CatVerb
 from eslib.dispatcher import dispatcher, command, Dispatcher
 from asyncio import coroutine
 import re
@@ -269,3 +269,10 @@ class IndiciesAddMapping(RepeterVerb):
 
     def to_str(self, running, value):
         return "%s -> %s" % (list(running.object.keys())[0], value.__str__())
+
+
+@command(IndiciesDispatcher)
+class IndiciesCat(CatVerb):
+
+    def get_source(self):
+        return self.api.escnx.cat.indices

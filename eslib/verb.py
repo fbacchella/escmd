@@ -169,6 +169,50 @@ class List(RepeterVerb):
         value = item[1]
         return "%s %s" % (name, list(value.keys()))
 
+class CatVerb(List):
+    verb = "cat"
+
+    def fill_parser(self, parser):
+        parser.add_option("-H", "--headers", dest="headers", default='*')
+        parser.add_option("-f", "--format", dest="format", default='text')
+        parser.add_option("-p", "--pretty", dest="pretty", default=False, action='store_true')
+        parser.add_option("-l", "--local", dest="local", default=False, action='store_true')
+
+    @coroutine
+    def check_verb_args(self, running, *args, headers='*', format='text', pretty=False, local=False, **kwargs):
+        running.headers = headers
+        running.format = format
+        running.pretty = pretty
+        running.local = local
+        if pretty:
+            running.formatting = {'indent': 2, 'sort_keys': True}
+        else:
+            running.formatting = {}
+        super().check_verb_args(*args, **kwargs)
+
+    def get_source(self):
+        raise NotImplementedError
+
+    @coroutine
+    def get(self, running, **kwargs):
+        val = yield from self.get_source()(format=running.format, h=running.headers, local=running.local)
+        return val
+
+    @coroutine
+    def get_elements(self, running):
+        if running.format == 'json':
+            return iter(running.object)
+        elif running.format == 'text':
+            return running.object.splitlines()
+        else:
+            return ()
+
+    def to_str(self, running, item):
+        if isinstance(item, str):
+            return item
+        else:
+            return json.dumps(item, **running.formatting)
+
 
 class Remove(Verb):
     verb = "remove"
