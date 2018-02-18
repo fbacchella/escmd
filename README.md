@@ -7,7 +7,7 @@ It's written in python and uses a fork from the [official python SDK](https://gi
 
 More documentation about the sdk can be found at [the python sdk doc](https://elasticsearch-py.readthedocs.io/en/master/).
 
-The fork was needed to add support for asyncio (using the Python 3.4 API) and improve the exception management. The needed
+The fork was needed to add support for [asyncio](https://docs.python.org/3/library/asyncio.html) (using the Python 3.4 API) and improve the exception management. The needed
 branch is on https://github.com/fbacchella/elasticsearch-py/tree/Async. It can be installed with:
 
     pip install git+https://github.com/fbacchella/elasticsearch-py.git@Async
@@ -18,13 +18,10 @@ Howto install in a virtualenv
     VENV=...
     export PYCURL_SSL_LIBRARY=..
     virtualenv-3 $VENV
+    $VENV/bin/pip install git+https://github.com/fbacchella/elasticsearch-py.git@Async
     git clone https://github.com/fbacchella/escmd.git
     cd escmd
     $VENV/bin/python setup.py install
-    
-or
-
-    $VENV/bin/pip install --process-dependency-links .
     
 On a RedHat familly distribution, the following packages are needed:
 
@@ -51,12 +48,18 @@ For each noun, there is a set of verbs that can apply to it. Each args section
 apply to the preceding term. So `escmd -c someting index` is different from `escmd index -c someting`.
 
 To get a list of noun that can be used, try `escmd -h`. For a list ov verb that
-can be used with an object, try `escmd <noun> -h`.
+can be used with an noun, try `escmd <noun> -h`.
 
 Config file
 ===========
 
-EsCmd use a `ini` file to store settings, a example is given in `sample_config.ini`.
+EsCmd use a `ini` file to store settings. The most basic ini will will be:
+
+```
+[api]
+url=localhost:9200
+sniff=False
+```
 
 It the environnement variable `ESCONFIG` is given, it will be used to find the config file.
 
@@ -82,15 +85,12 @@ Usually a noun option take a filter option that can define on what object it app
     -s SEARCH, --search=SEARCH
                         Filter using a search expression
 
-The option id and name obvioulsy return single object. But search can return many. Usually verb will then fail but some 
-(like export or list) will operate on each of them.
-
-
-
 Kerberos support
 ----------------
 
-EsCmd add improved support of keytab. It's configured in [kerberos] section
+EsCmd can use Kerberos and keytab for SSO authentication. It's actived by adding `kerberos=True` in the  `[api]` section .
+
+The keytab settings is configured in an optionnal `[kerberos]` section
 in the ini file:
 
     [kerberos]
@@ -103,6 +103,22 @@ be stored and can use alternative credential cache, for more information see [MI
 
 It uses [Python's GSSAPI](https://pypi.python.org/pypi/gssapi) but it's imported only if needed, so installation is not mandatory.
 
+
+Noun and verbs
+--------------
+
+Documentation about noun and verbs is to be found in the [wiki](https://github.com/fbacchella/escmd/wiki/List-of-Nouns)
+
+Cat noun
+--------
+
+Some noun got a `cat` verb, that maps to the cat REST api. They all share a same set of options:
+```
+  -H HEADERS, --headers=HEADERS, default to '*'
+  -f FORMAT, --format=FORMAT, can be 'text' or 'json', the elasticsearch-py don't hanlde yaml output
+  -p, --pretty          
+  -l, --local           
+```
 
 Build status
 ------------
