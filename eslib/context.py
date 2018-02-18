@@ -41,6 +41,9 @@ class Context(object):
         if explicit_user and explicit_kerberos:
             raise ConfigurationError('both kerberos and login/password authentication requested')
 
+        if 'url' in kwargs and 'sniff' not in kwargs:
+            kwargs['sniff'] = False
+
         config = ConfigParser()
         if config_file is not None:
             config.read(config_file, encoding='utf-8')

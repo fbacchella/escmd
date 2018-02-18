@@ -101,6 +101,7 @@ def main():
     parser.add_option("--passwordfile", dest="passwordfile", help="Read the password from that file")
     parser.add_option("-u", "--user", "--username", dest="username", help="User to authenticate")
     parser.add_option("-k", "--kerberos", dest="kerberos", help="Uses kerberos authentication", action='store_true')
+    parser.add_option("-U", "--url", dest="url", help="URL to connect to", default=None)
 
     (options, args) = parser.parse_args()
 
