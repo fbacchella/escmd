@@ -67,3 +67,4 @@ import eslib.nodes
 import eslib.templates
 import eslib.tasks
 import eslib.cluster
+import eslib.shards
