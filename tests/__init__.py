@@ -124,6 +124,14 @@ class DispatchersTestCase(unittest.TestCase):
             for j in i.object:
                 pass
 
+    def test_tree(self):
+        for tree_noun in ('shard', 'task'):
+            dispatcher = eslib.dispatchers[tree_noun]()
+            dispatcher.api = self.ctx
+            for i in self._run_action(dispatcher, 'tree'):
+                for j in i.object:
+                    pass
+
     def _run_action(self, dispatcher, verb, object_options={}, object_args=[]):
         loop = asyncio.get_event_loop()
         multi_handle = dispatcher.api.multi_handle
