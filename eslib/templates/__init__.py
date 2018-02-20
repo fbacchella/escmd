@@ -1,4 +1,4 @@
-from eslib.verb import Verb, List, DumpVerb, RepeterVerb
+from eslib.verb import Verb, List, DumpVerb, RepeterVerb, CatVerb
 import json
 from eslib.dispatcher import dispatcher, command, Dispatcher
 from asyncio import coroutine
@@ -52,3 +52,33 @@ class TemplatesPut(Verb):
 
     def to_str(self, running, value):
         return value.__str__()
+
+"""
+delete_template(*args, **kwargs)
+Delete an index template by its name. http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-templates.html
+
+Parameters:	
+name – The name of the template
+master_timeout – Specify timeout for connection to master
+timeout – Explicit operation timeout
+"""
+
+@command(TemplatesDispatcher, verb='delete')
+class TemplatesDelete(RepeterVerb):
+
+    @coroutine
+    def action(self, element, *args, **kwargs):
+        val = yield from self.api.escnx.indices.delete_template(name=element[0])
+        return val
+
+    @coroutine
+    def check_verb_args(self, running, ):
+        if running.template_name == '*':
+            raise Exception("won't destroy everything, -n/--name mandatory")
+
+
+@command(TemplatesDispatcher)
+class TemplatesCat(CatVerb):
+
+    def get_source(self):
+        return self.api.escnx.cat.templates
