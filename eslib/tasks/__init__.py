@@ -1,5 +1,6 @@
-from eslib.verb import Verb, List, DumpVerb
+from eslib.verb import Verb, DumpVerb, CatVerb
 from eslib.dispatcher import dispatcher, command, Dispatcher
+from eslib.tree import TreeNode
 from asyncio import coroutine
 import datetime
 import time
@@ -21,22 +22,7 @@ class TasksDispatcher(Dispatcher):
         return val
 
 
-class TreeNode(object):
-    def __init__(self, value):
-        self.value = value
-        self.children = []
-
-    def addchild(self, child):
-        self.children.append(child)
-
-    def __repr__(self, level=-1):
-        if self.value is not None:
-            ret = "    "*level+self._value_to_str(level)+"\n"
-        else:
-            ret = ''
-        for child in self.children:
-            ret += child.__repr__(level+1)
-        return ret
+class TaskTreeNode(TreeNode):
 
     def _value_to_str(self, level):
         node_name = self.value.get('node_name', '')
@@ -45,12 +31,12 @@ class TreeNode(object):
         start_time_in_millis = int(self.value.get('start_time_in_millis', -1))
         action = self.value.get('action', '')
         id = self.value.get('id', '')
-        running_time = datetime.timedelta(seconds=running_time_in_nanos / 1e9)
+        running_time = datetime.timedelta(seconds=int(running_time_in_nanos / 1e9))
         start_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(round(start_time_in_millis / 1000, 0)))
-        return "%s:%-*s %-30s %s %s %s" % (node_id, 15-level*4, id, action, node_name, running_time, start_time)
+        return "%s:%-*s %-50s %s %s %s" % (node_id, 12-level*TreeNode.identation, id, action, node_name, running_time, start_time)
 
 
-@command(TasksDispatcher, verb='list')
+@command(TasksDispatcher, verb='tree')
 class TasksList(Verb):
 
     def fill_parser(self, parser):
@@ -71,7 +57,7 @@ class TasksList(Verb):
 
     @coroutine
     def execute(self, running):
-        tree = TreeNode(None)
+        tree = TaskTreeNode(None)
         nodes = { '' : tree }
         try_parent = { '' : None }
         task_infos = {}
@@ -89,7 +75,7 @@ class TasksList(Verb):
             next_try_parent = {}
             for node, parent in try_parent.items():
                 if parent in nodes:
-                    node_tree = TreeNode(task_infos[node])
+                    node_tree = TaskTreeNode(task_infos[node])
                     nodes[parent].addchild(node_tree)
                     nodes[node] = node_tree
                 elif parent is not None:
