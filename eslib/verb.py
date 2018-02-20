@@ -280,7 +280,7 @@ class ReadSettings(DumpVerb):
                 yield str(v)
 
 
-class WriteSettings(Verb):
+class WriteSettings(RepeterVerb):
 
     keyvalue_re = re.compile(r'^([-a-z0-9_\.]+)=(.*)$')
     keydepth_re = re.compile(r'^([-a-z0-9_]+)(?:\.(.*))?$')
