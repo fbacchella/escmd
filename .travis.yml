@@ -21,6 +21,7 @@ install:
   - unzip /tmp/es-snap.zip -d /tmp/
   - /tmp/elasticsearch-*/bin/elasticsearch -E path.repo=/tmp -E repositories.url.allowed_urls='http://*' -E node.attr.testattr=test -d
   - pip install .
+  - while : ; do curl -s http://localhost:9200/ && break ; sleep 1 ; done
 
 script:
   - python setup.py test
