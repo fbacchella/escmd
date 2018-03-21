@@ -16,6 +16,45 @@ logger = logging.getLogger('eslib.pycurlconnection')
 
 status_line_re = re.compile(r'HTTP\/\S+\s+\d+\s+(.*?)$')
 
+version_info_vector = list(pycurl.version_info())
+version_info_vector.reverse()
+version_info = lambda x: False
+
+for i in ('age', 'version', 'version_num', 'host', 'features', 'ssl_version', 'ssl_version_num', 'libz_version', 'protocols',
+          'ares', 'ares_num',
+          'libidn',
+          'iconv_ver_num', 'libssh_version',
+          'brotli_ver_num', 'brotli_version'):
+    setattr(version_info, i, version_info_vector.pop())
+    if len(version_info_vector) == 0:
+        break
+
+features=set()
+features_mapping={'VERSION_ASYNCHDNS': 'AsynchDNS',
+                  'VERSION_GSSNEGOTIATE': 'GSS-Negotiate',
+                  'VERSION_IDN': 'IDN',
+                  'VERSION_IPV6': 'IPv6',
+                  'VERSION_LARGEFILE': 'Largefile',
+                  'VERSION_NTLM': 'NTLM',
+                  'VERSION_NTLM_WB': 'NTLM_WB',
+                  'VERSION_SSL': 'SSL',
+                  'VERSION_LIBZ': 'libz',
+                  'VERSION_UNIX_SOCKETS': 'unix-sockets',
+                  'VERSION_KERBEROS5': 'Kerberos',
+                  'VERSION_SPNEGO': 'SPNEGO',
+                  'VERSION_HTTP2': 'HTTP2',
+                  'VERSION_GSSAPI': 'GSS-API',
+                  'VERSION_TLSAUTH_SRP': 'TLS-SRP'}
+for i in ('VERSION_IPV6', 'VERSION_KERBEROS4', 'VERSION_KERBEROS5', 'VERSION_SSL', 'VERSION_LIBZ', 'VERSION_NTLM',
+          'VERSION_GSSNEGOTIATE', 'VERSION_DEBUG', 'VERSION_CURLDEBUG', 'VERSION_ASYNCHDNS', 'VERSION_SPNEGO', 'VERSION_LARGEFILE',
+          'VERSION_IDN', 'VERSION_SSPI', 'VERSION_GSSAPI', 'VERSION_CONV', 'VERSION_TLSAUTH_SRP', 'VERSION_NTLM_WB', 'VERSION_HTTP2',
+          'VERSION_UNIX_SOCKETS', 'VERSION_PSL', 'VERSION_HTTPS_PROXY', 'VERSION_MULTI_SSL', 'VERSION_BROTLI'):
+    if hasattr(pycurl, i):
+        if version_info.features & getattr(pycurl, i) != 0:
+            features.add(features_mapping.get(i, i))
+version_info.features = features
+
+
 def get_header_function(headers):
 
     # Current header are store in a different dict
@@ -351,7 +390,7 @@ class PyCyrlConnection(Connection):
         if self.ca_certs is not None:
             settings[pycurl.CAINFO] = self.ca_certs
 
-        if self.kerberos:
+        if self.kerberos and 'GSS-API' in version_info.features:
             settings.update({
                 pycurl.HTTPAUTH: pycurl.HTTPAUTH_NEGOTIATE,
                 pycurl.USERPWD: ':'
