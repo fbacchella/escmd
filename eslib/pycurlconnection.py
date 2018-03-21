@@ -300,10 +300,11 @@ class PyCyrlConnection(Connection):
 
         self.multi_handle = multi_handle
 
+        self.verify_certs = verify_certs
+        if ca_certs is not None:
+            self.ca_certs = ca_certs
         if use_ssl:
             self.use_ssl = True
-            self.verify_certs = verify_certs
-            self.ca_certs = ca_certs
         else:
             self.use_ssl = False
         self.kerberos = kerberos
@@ -342,15 +343,14 @@ class PyCyrlConnection(Connection):
             pycurl.UNRESTRICTED_AUTH: True,
             pycurl.POSTREDIR: pycurl.REDIR_POST_ALL,
         }
-        if self.use_ssl:
-            # Strict TLS check
-            if self.verify_certs:
-                settings.update({
-                    pycurl.SSL_VERIFYPEER: 1,
-                    pycurl.SSL_VERIFYHOST: 2,
-                })
-            if self.ca_certs is not None:
-                settings[pycurl.CAINFO] = self.ca_certs
+        # Strict TLS check
+        if self.verify_certs:
+            settings.update({
+                pycurl.SSL_VERIFYPEER: 1,
+                pycurl.SSL_VERIFYHOST: 2,
+            })
+        if self.ca_certs is not None:
+            settings[pycurl.CAINFO] = self.ca_certs
 
         if self.kerberos:
             settings.update({
