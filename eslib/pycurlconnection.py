@@ -301,8 +301,7 @@ class PyCyrlConnection(Connection):
         self.multi_handle = multi_handle
 
         self.verify_certs = verify_certs
-        if ca_certs is not None:
-            self.ca_certs = ca_certs
+        self.ca_certs = ca_certs
         if use_ssl:
             self.use_ssl = True
         else:
