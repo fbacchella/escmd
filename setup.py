@@ -9,8 +9,8 @@ def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 install_requires = [
-    'elasticsearch==6.1.1',
-    'PycURL==7.43.0.1'
+    'elasticsearch>6.1.1',
+    'PycURL>=7.43.0'
     ]
 
 setup(
