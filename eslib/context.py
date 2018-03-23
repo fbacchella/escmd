@@ -126,7 +126,6 @@ class Context(object):
 
     def connect(self):
         self.loop = new_event_loop()
-        self.loop.set_debug(True)
         self.multi_handle = PyCyrlMuliHander(self.api_connect_settings['max_active'], loop=self.loop)
         cnxprops={'multi_handle': self.multi_handle}
         if self.api_connect_settings['debug']:
