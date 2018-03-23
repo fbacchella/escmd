@@ -97,7 +97,7 @@ class IndiciesDump(DumpVerb):
         yield from super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
-    def get_elements(self, running, **kwargs):
+    def get_elements(self, running):
         tasks_dict = {}
         for node, node_info in running.object['nodes'].items():
             tasks = node_info['tasks']

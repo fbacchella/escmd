@@ -121,7 +121,7 @@ def main():
                 # run the found command and print the result
                 status = print_run_phrase(dispatcher, verb, object_options, object_args)
                 sys.exit(status)
-            except (eslib.ESLibError) as e:
+            except eslib.ESLibError as e:
                 print("The action \"%s %s\" failed with \n    %s" % (dispatcher.object_name, verb, e.error_message))
                 return 251
             finally:
