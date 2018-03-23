@@ -2,6 +2,8 @@ from configparser import ConfigParser
 from elasticsearch import Elasticsearch
 from eslib.pycurlconnection import PyCyrlConnection, CurlDebugType, PyCyrlMuliHander
 from eslib.asynctransport import AsyncTransport
+from asyncio import get_event_loop, new_event_loop, ensure_future, wait, FIRST_COMPLETED
+
 
 class ConfigurationError(Exception):
     def __init__(self, value):
@@ -40,6 +42,7 @@ class Context(object):
     def __init__(self, config_file=None, **kwargs):
         super(Context, self).__init__()
         self.connected = False
+        self.loop = None
 
         explicit_user = 'password' in kwargs or 'passwordfile' in kwargs or 'username' in kwargs
         explicit_kerberos = 'kerberos' in kwargs and kwargs.get('kerberos')
@@ -121,9 +124,10 @@ class Context(object):
             for f in filters:
                 self.filter |= CurlDebugType[f.upper()]
 
-        self.multi_handle = PyCyrlMuliHander(self.api_connect_settings['max_active'])
-
     def connect(self):
+        self.loop = new_event_loop()
+        self.loop.set_debug(True)
+        self.multi_handle = PyCyrlMuliHander(self.api_connect_settings['max_active'], loop=self.loop)
         cnxprops={'multi_handle': self.multi_handle}
         if self.api_connect_settings['debug']:
             cnxprops.update({
@@ -156,10 +160,31 @@ class Context(object):
                                    verify_certs=self.api_connect_settings['verify_certs'],
                                    ca_certs=self.api_connect_settings['ca_file'],
                                    kerberos=self.api_connect_settings['kerberos'],
-                                   http_auth=http_auth,
+                                   http_auth=http_auth, loop=self.loop,
                                    **cnxprops)
-        self.escnx.ping()
+        self.curl_perform_task = ensure_future(self.multi_handle.perform(), loop=self.loop)
+        return self.perform_query(self.escnx.ping())
+
+    def perform_query(self, query):
+        def looper():
+            done, pending = yield from wait((query, self.curl_perform_task), loop=self.loop, return_when=FIRST_COMPLETED)
+            return done, pending
+
+        done, pending = self.loop.run_until_complete(looper())
+        # done contain either a result/exception from run_phrase or an exception from multi_handle.perform()
+        # In both case, the first result is sufficient
+        for i in done:
+            running = i.result()
+            # If running is None, run_phrase excited with sys.exit, because of argparse
+            if running is not None:
+                return running
 
     def disconnect(self):
+        if self.loop is not None:
+            self.multi_handle.running = False
+            self.loop.run_until_complete(self.curl_perform_task)
+            self.loop.stop()
+            self.loop.close()
+            self.loop = None
         self.escnx = None
         self.connected = False

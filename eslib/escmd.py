@@ -6,10 +6,10 @@ import optparse
 import eslib
 import codecs
 from inspect import isgenerator
-from asyncio import get_event_loop, wait, FIRST_COMPLETED, gather
 from traceback import print_exception
-
+from eslib import pycurlconnection
 from eslib.context import Context, ConfigurationError
+
 
 def safe_print(string):
     """Ensure that string will print without error if it contains unprintable characters"""
@@ -43,38 +43,15 @@ def filter_result(cmd, running, result):
         return 0
 
 
-def print_result(running):
-    cmd = running.cmd
-    result = running.result
-    return filter_result(cmd, running, result)
-
-
 def print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
-    loop = get_event_loop()
-    multi_handle = dispatcher.api.multi_handle
-    def looper():
-        done, pending = yield from wait((
-            dispatcher.run_phrase(verb, object_options, object_args),
-            multi_handle.perform()
-        ), loop=loop, return_when=FIRST_COMPLETED)
-        return done, pending
-    try:
-        done, pending = loop.run_until_complete(looper())
-        # done contain either a result/exception from run_phrase or an exception from multi_handle.perform()
-        # In both case, the first result is sufficient
-        for i in done:
-            running = i.result()
-            # If running is None, run_phrase excited with sys.exit, because of argparse
-            if running is not None:
-                return print_result(running)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        # finished, now ensure that multi_handle.perform() is finished and all previous pending tasks
-        multi_handle.running = False
-        loop.run_until_complete(gather(*pending))
-        loop.stop()
-        loop.close()
+    query = dispatcher.run_phrase(verb, object_options, object_args)
+    running = dispatcher.api.perform_query(query)
+    if running is not None:
+        cmd = running.cmd
+        result = running.result
+        return filter_result(cmd, running, result)
+    else:
+        return 0
 
 
 # needed because dict.update is using shortcuts and don't works on subclass of dict
@@ -107,6 +84,11 @@ def main():
 
     #Extract the context options from the first level arguments
     context_args = {k: v for k, v in list(vars(options).items()) if v is not None}
+    try:
+        context = Context(**context_args)
+    except ConfigurationError as e:
+        print(e.error_message)
+        return 253
 
     if len(args) > 0:
         #A object is found try to resolve the verb
@@ -128,12 +110,8 @@ def main():
         if len(object_args) > 0:
             verb = object_args.pop(0)
             try:
-                context = Context(**context_args)
-            except ConfigurationError as e:
-                print(e.error_message)
-                return 253
-            try:
                 context.connect()
+
                 dispatcher.api = context
                 object_options = vars(object_options)
                 for k,v in list(object_options.items()):

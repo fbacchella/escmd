@@ -4,14 +4,16 @@ import optparse
 import eslib
 from eslib import context
 
-
 class DispatchersTestCase(unittest.TestCase):
 
     def setUp(self):
-        self.ctx = context.Context(url='localhost:9200', sniff=False)
+        self.ctx = context.Context(url='localhost:9200', sniff=False, debug=False)
         self.ctx.connect()
-        for i in self._run_async(self.ctx.escnx.indices.create(id(self))):
+        for i in self.ctx.perform_query(self.ctx.escnx.indices.create(id(self))):
             pass
+
+    def tearDown(self):
+        self.ctx.disconnect()
 
     def test_list_nouns(self):
         self.assertTrue('cluster' in eslib.dispatchers)
@@ -33,8 +35,8 @@ class DispatchersTestCase(unittest.TestCase):
             except SystemExit:
                 pass
             for verb_name, verb_class in dispatch.verbs.items():
-                for i in self._run_action(dispatch, verb_name, object_args=['-h']):
-                    self.assertIsNone(i)
+                running = self._run_action(dispatch, verb_name, object_args=['-h'])
+                self.assertIsNone(running)
 
     def test_list_verb(self):
         for i in ('task', 'index', 'template', 'node'):
@@ -111,73 +113,28 @@ class DispatchersTestCase(unittest.TestCase):
 
     def action_read_settings(self, dispatcher, object_args, tester):
         dispatcher.api = self.ctx
-        for i in self._run_action(dispatcher, 'readsettings', object_args=object_args):
-            if i.result is None:
-                continue
-            for j in i.result:
-                tester(i, j)
+        running = self._run_action(dispatcher, 'readsettings', object_args=object_args)
+        for j in running.result:
+            tester(running, j)
 
     def test_cat_indices(self):
         dispatcher = eslib.dispatchers['index']()
         dispatcher.api = self.ctx
-        for i in self._run_action(dispatcher, 'cat', object_args=['-f', 'json']):
-            for j in i.object:
-                pass
+        running = self._run_action(dispatcher, 'cat', object_args=['-f', 'json'])
+        for i in running.object:
+            pass
 
     def test_tree(self):
         for tree_noun in ('shard', 'task'):
             dispatcher = eslib.dispatchers[tree_noun]()
             dispatcher.api = self.ctx
-            for i in self._run_action(dispatcher, 'tree'):
-                for j in i.object:
-                    pass
+            running = self._run_action(dispatcher, 'tree')
+            for i in running.object:
+                pass
 
     def _run_action(self, dispatcher, verb, object_options={}, object_args=[]):
-        loop = asyncio.get_event_loop()
-        multi_handle = dispatcher.api.multi_handle
-        multi_handle.running = True
-        def looper():
-            done, pending = yield from asyncio.wait((
-                dispatcher.run_phrase(verb, object_options, object_args),
-                multi_handle.perform()
-            ), loop=loop, return_when=asyncio.FIRST_COMPLETED)
-            return done, pending
-
-        try:
-            done, pending = loop.run_until_complete(looper())
-            # done contain either a result/exception from run_phrase or an exception from multi_handle.perform()
-            # In both case, the first result is sufficient
-            for i in done:
-                yield i.result()
-        except KeyboardInterrupt:
-            pass
-        finally:
-            # finished, now ensure that multi_handle.perform() is finished and all previous pending tasks
-            multi_handle.running = False
-            loop.run_until_complete(asyncio.gather(*pending))
-
-    def _run_async(self, generator):
-        loop = asyncio.get_event_loop()
-        multi_handle = self.ctx.multi_handle
-        multi_handle.running = True
-        def looper():
-            done, pending = yield from asyncio.wait((
-                generator,
-                multi_handle.perform()
-            ), loop=loop, return_when=asyncio.FIRST_COMPLETED)
-            return done, pending
-
-        try:
-            done, pending = loop.run_until_complete(looper())
-            # done contain either a result/exception from run_phrase or an exception from multi_handle.perform()
-            # In both case, the first result is sufficient
-            for i in done:
-                yield i.result()
-        except KeyboardInterrupt:
-            pass
-        finally:
-            # finished, now ensure that multi_handle.perform() is finished and all previous pending tasks
-            multi_handle.running = False
-            loop.run_until_complete(asyncio.gather(*pending))
+        query = dispatcher.run_phrase(verb, object_options, object_args)
+        running = dispatcher.api.perform_query(query)
+        return running
 
 

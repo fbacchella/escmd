@@ -82,10 +82,10 @@ class RepeterVerb(Verb):
             return enumerator(ex)
         coros = []
         for e in elements:
-            task = ensure_future(self.action(e, running))
+            task = ensure_future(self.action(e, running), loop=self.api.loop)
             coros.append(task)
         if len(coros) > 0:
-            done, pending = yield from wait(coros)
+            done, pending = yield from wait(coros, loop=self.api.loop)
             def enumerator():
                 for i in done:
                     if i.exception() is not None:

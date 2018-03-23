@@ -103,7 +103,9 @@ def get_header_function(headers):
 
     return header_function
 
+
 content_type_re = re.compile("(?P<content_type>.*?); (?:charset=(?P<charset>.*))")
+
 
 def return_error(status_code, raw_data, content_type='application/json', http_message=None):
     """ Locate appropriate exception and raise it. """
@@ -192,8 +194,8 @@ def get_curl_debug(debug_filter, logger):
 
 class PyCyrlMuliHander(object):
 
-    def __init__(self, max_query=10):
-        self.loop = get_event_loop()
+    def __init__(self, max_query=10, loop=get_event_loop()):
+        self.loop = loop
         self.multi = pycurl.CurlMulti()
         self.share = pycurl.CurlShare()
 
@@ -203,7 +205,7 @@ class PyCyrlMuliHander(object):
         self.share.setopt(pycurl.SH_SHARE, pycurl.LOCK_DATA_SSL_SESSION)
 
         self.handles = set()
-        self.waiting_handles = Queue()
+        self.waiting_handles = Queue(loop=self.loop)
         self.running = True
         self.max_active = max_query
 
@@ -221,7 +223,7 @@ class PyCyrlMuliHander(object):
 
         # put the query in the waiting queue, that launch it if possible
         # and wait for the processing to be finished
-        yield from wait((future,self.waiting_handles.put(handle)))
+        yield from wait((future,self.waiting_handles.put(handle)), loop=self.loop)
         return future
 
     def close(self):
@@ -240,7 +242,7 @@ class PyCyrlMuliHander(object):
         while len(self.handles) < self.max_active:
             try:
                 if wait:
-                    handler = yield from wait_for(self.waiting_handles.get(), timeout)
+                    handler = yield from wait_for(self.waiting_handles.get(), timeout, loop=self.loop)
                 else:
                     handler = self.waiting_handles.get_nowait()
                 # only wait once
@@ -259,10 +261,10 @@ class PyCyrlMuliHander(object):
             if ret > 0:
                 raise ConnectionError("pycurl failed", ret)
 
-
     def perform(self, timeout=0.1):
         """
-        Loop on waiting handles to process them until they are no more waiting one and all send are finished
+        Loop on waiting handles to process them until they are no more waiting one and all send are finished.
+        It's never finished until closed for end of all processing, don't wait for it on loop
         :param timeout: the timeout for the loop
         :return: Nothing
         """
