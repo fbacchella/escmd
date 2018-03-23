@@ -16,7 +16,7 @@ class Context(object):
     # The api settings that store boolean values
     api_booleans = frozenset(['debug', 'insecure', 'kerberos', 'sniff'])
 
-    # default values
+    # default values for connection
     api_connect_settings = {
         'url': None,
         'sniff': True,
@@ -30,6 +30,11 @@ class Context(object):
         'log': None,
         'user_agent': None,
         'max_active': 10
+    }
+
+    # default values for logging
+    logging_settings = {
+        'filters': 'header,data,text',
     }
 
     def __init__(self, config_file=None, **kwargs):
@@ -74,6 +79,12 @@ class Context(object):
                 # given in the config file
                 self.api_connect_settings[attr_name] = config_api[attr_name]
 
+        # extract values from explicit arguments or else from config file
+        for attr_name in Context.logging_settings.keys():
+            if attr_name in config_logging:
+                # given in the config file
+                self.logging_settings[attr_name] = config_logging[attr_name]
+
         if 'passwordfile' in self.api_connect_settings and self.api_connect_settings['passwordfile'] is not None:
             passwordfilename = self.api_connect_settings.pop('passwordfile')
             with open(passwordfilename,'r') as passwordfilename:
@@ -104,9 +115,9 @@ class Context(object):
         if self.api_connect_settings['username'] is None and self.api_connect_settings['kerberos'] is None:
             raise ConfigurationError('not enought authentication informations')
 
-        if config_logging.get('filters', None) is not None:
+        if self.logging_settings.get('filters', None) is not None and self.api_connect_settings['debug']:
             self.filter = 0
-            filters = [x.strip() for x in config_logging['filters'].split(',')]
+            filters = [x.strip() for x in self.logging_settings['filters'].split(',')]
             for f in filters:
                 self.filter |= CurlDebugType[f.upper()]
 
