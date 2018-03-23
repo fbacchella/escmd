@@ -12,7 +12,7 @@ class IndiciesDispatcher(Dispatcher):
         parser.add_option("-n", "--name", dest="name", help="index filter")
 
     @coroutine
-    def check_noun_args(self, running, name='*'):
+    def check_noun_args(self, running, name='_all'):
         running.index_name = name
 
     @coroutine

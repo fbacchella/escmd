@@ -11,7 +11,7 @@ class TemplatesDispatcher(Dispatcher):
         parser.add_option("-n", "--name", dest="template_name", help="nodes filter")
 
     @coroutine
-    def check_noun_args(self, running, template_name='*'):
+    def check_noun_args(self, running, template_name=''):
         running.template_name = template_name
 
     def get(self, running):
