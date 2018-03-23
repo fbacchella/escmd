@@ -39,7 +39,7 @@ class DispatchersTestCase(unittest.TestCase):
                 self.assertIsNone(running)
 
     def test_list_verb(self):
-        for i in ('task', 'index', 'template', 'node'):
+        for i in ('index', 'template', 'node'):
             dispatcher = eslib.dispatchers[i]()
             dispatcher.api = self.ctx
             self.assertIsNotNone(self._run_action(dispatcher, 'list'))
