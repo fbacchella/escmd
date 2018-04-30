@@ -78,13 +78,12 @@ class Context(object):
         self.current_config = copy.deepcopy(Context.default_settings)
 
         # Read the configuration
-        if len(config.sections()) != 0:
-            for section in config.sections():
-                for k,v in config.items(section):
-                    if k in Context.boolean_options[section]:
-                        self.current_config[section][k] = config.getboolean(section, k)
-                    else:
-                        self.current_config[section][k] = v
+        for section in config.sections():
+            for k,v in config.items(section):
+                if k in Context.boolean_options[section]:
+                    self.current_config[section][k] = config.getboolean(section, k)
+                else:
+                    self.current_config[section][k] = v
 
 
         # extract values from explicit arguments or else from config file

@@ -349,7 +349,8 @@ class PyCyrlConnection(Connection):
     #** kwargs
 
     ssl_opts_mapping = {
-        'ca_certs': pycurl.CAINFO,
+        'ca_certs_directory': pycurl.CAPATH,
+        'ca_certs_file': pycurl.CAINFO,
         'cert_file': pycurl.SSLCERT,
         'cert_type': pycurl.SSLCERTTYPE,
         'key_file': pycurl.SSLKEY,
