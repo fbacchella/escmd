@@ -75,7 +75,7 @@ class Context(object):
             config.read(config_file, encoding='utf-8')
 
         # Prepare the configuration with default settings
-        self.current_config = copy.copy(Context.default_settings)
+        self.current_config = copy.deepcopy(Context.default_settings)
 
         # Read the configuration
         if len(config.sections()) != 0:
