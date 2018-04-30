@@ -4,6 +4,7 @@ from eslib.pycurlconnection import PyCyrlConnection, CurlDebugType, PyCyrlMuliHa
 from eslib.asynctransport import AsyncTransport
 from asyncio import get_event_loop, new_event_loop, ensure_future, wait, FIRST_COMPLETED
 
+import copy
 
 class ConfigurationError(Exception):
     def __init__(self, value):
@@ -15,35 +16,52 @@ class ConfigurationError(Exception):
 
 
 class Context(object):
-    # The api settings that store boolean values
-    api_booleans = frozenset(['debug', 'insecure', 'kerberos', 'sniff'])
+    # The settings that store boolean values
+    boolean_options = {'api': frozenset(['debug', 'kerberos', 'sniff']), 'logging': {}, 'kerberos': {}, 'ssl': frozenset(['verify_certs'])}
+
+    # mapping from command line options to configuration options:
+    arg_options = {'debug': ['api', 'debug'],
+                   'username': ['api', 'username'],
+                   'passwordfile': ['api', 'passwordfile'],
+                   'kerberos': ['api', 'kerberos'],
+                   'url': ['api', 'url']}
 
     # default values for connection
-    api_connect_settings = {
-        'url': None,
-        'sniff': True,
-        'username': None,
-        'password': None,
-        'passwordfile': None,
-        'ca_file': None,
-        'verify_certs': True,
-        'kerberos': False,
-        'debug': False,
-        'log': None,
-        'user_agent': None,
-        'max_active': 10
-    }
-
-    # default values for logging
-    logging_settings = {
-        'filters': 'header,data,text',
+    default_settings = {
+        'api': {
+            'url': None,
+            'sniff': True,
+            'username': None,
+            'password': None,
+            'passwordfile': None,
+            'kerberos': False,
+            'debug': False,
+            'log': None,
+            'user_agent': 'eslib/pycurl',
+            'max_active': 10
+        },
+        'logging': {
+            'filters': 'header,data,text',
+        },
+        'kerberos': {
+            'ccache': None,
+            'keytab': None,
+            'principal': None,
+        },
+        'ssl': {
+            'ca_file': None,
+            'verify_certs': True,
+            'cert_file': None,
+            'cert_type': 'PEM',
+            'key_file': None,
+            'key_type': 'PEM',
+            'key_password': None,
+        }
     }
 
     def __init__(self, config_file=None, **kwargs):
         super(Context, self).__init__()
         self.connected = False
-        self.loop = None
-
         explicit_user = 'password' in kwargs or 'passwordfile' in kwargs or 'username' in kwargs
         explicit_kerberos = 'kerberos' in kwargs and kwargs.get('kerberos')
         if explicit_user and explicit_kerberos:
@@ -56,84 +74,77 @@ class Context(object):
         if config_file is not None:
             config.read(config_file, encoding='utf-8')
 
-        config_api = {}
-        config_logging = {}
-        config_kerberos = {}
+        # Prepare the configuration with default settings
+        self.current_config = copy.copy(Context.default_settings)
 
+        # Read the configuration
         if len(config.sections()) != 0:
-            for (k, v) in config.items("api"):
-                if k in Context.api_booleans:
-                    config_api[k] = config.getboolean('api', k)
-                else:
-                    config_api[k] = v
+            for section in config.sections():
+                for k,v in config.items(section):
+                    if k in Context.boolean_options[section]:
+                        self.current_config[section][k] = config.getboolean(section, k)
+                    else:
+                        self.current_config[section][k] = v
 
-            if config.has_section('logging'):
-                config_logging = {k: v for k, v in config.items('logging')}
-
-            if config.has_section('kerberos'):
-                config_kerberos = {k: v for k,v in config.items('kerberos')}
 
         # extract values from explicit arguments or else from config file
-        for attr_name in Context.api_connect_settings.keys():
-            if attr_name in kwargs:
-                self.api_connect_settings[attr_name] = kwargs.pop(attr_name)
-                # given in the command line
-            elif attr_name in config_api:
-                # given in the config file
-                self.api_connect_settings[attr_name] = config_api[attr_name]
+        for arg_name, arg_destination in Context.arg_options.items():
+            if arg_name in kwargs:
+                self.current_config[arg_destination[0]][arg_destination[1]] = kwargs.pop(arg_name)
 
-        # extract values from explicit arguments or else from config file
-        for attr_name in Context.logging_settings.keys():
-            if attr_name in config_logging:
-                # given in the config file
-                self.logging_settings[attr_name] = config_logging[attr_name]
-
-        if 'passwordfile' in self.api_connect_settings and self.api_connect_settings['passwordfile'] is not None:
-            passwordfilename = self.api_connect_settings.pop('passwordfile')
-            with open(passwordfilename,'r') as passwordfilename:
-                self.api_connect_settings['password'] = passwordfilename.read()
+        passwordfilename = self.current_config['api'].pop('passwordfile')
+        if passwordfilename is not None:
+            with open(passwordfilename,'r') as passwordfile:
+                self.current_config['api']['password'] = passwordfile.read()
 
         if explicit_user:
-            self.api_connect_settings['kerberos'] = False
+            self.current_config['api']['kerberos'] = False
         elif explicit_kerberos:
-            self.api_connect_settings['username'] = None
-            self.api_connect_settings['password'] = None
+            self.current_config['api']['username'] = None
+            self.current_config['api']['password'] = None
 
-        if self.api_connect_settings['kerberos'] and config_kerberos.get('keytab', None) is not None:
+        if self.current_config['api']['kerberos'] and self.current_config['kerberos'].get('keytab', None) is not None:
             import gssapi
             import os
 
-            ccache = config_kerberos.get('ccache', None)
-            keytab = config_kerberos.get('keytab', None)
-            kname = config_kerberos.get('principal', None)
+            ccache = self.current_config['kerberos']['ccache']
+            keytab = self.current_config['kerberos']['keytab']
+            kname = self.current_config['kerberos']['principal']
             if kname is not None:
                 kname = gssapi.Name(kname)
 
             gssapi.creds.Credentials(name=kname, usage='initiate', store={'ccache': ccache, 'client_keytab': keytab})
             os.environ['KRB5CCNAME'] = ccache
-            self.api_connect_settings['kerberos'] = True
+            self.current_config['api']['kerberos'] = True
 
-        if self.api_connect_settings['url'] == None:
+        if self.current_config['api']['url'] == None:
             raise ConfigurationError('incomplete configuration, Elastic url not found')
-        if self.api_connect_settings['username'] is None and self.api_connect_settings['kerberos'] is None:
+        if self.current_config['api']['username'] is None and self.current_config['api']['kerberos'] is None:
             raise ConfigurationError('not enought authentication informations')
 
-        if self.logging_settings.get('filters', None) is not None and self.api_connect_settings['debug']:
+        if self.current_config['logging']['filters'] is not None and self.current_config['api']['debug']:
             self.filter = 0
-            filters = [x.strip() for x in self.logging_settings['filters'].split(',')]
+            filters = [x.strip() for x in self.current_config['logging']['filters'].split(',')]
             for f in filters:
                 self.filter |= CurlDebugType[f.upper()]
 
-    def connect(self):
-        self.loop = new_event_loop()
-        self.multi_handle = PyCyrlMuliHander(self.api_connect_settings['max_active'], loop=self.loop)
+    def connect(self, parent=None):
+        if parent is not None:
+            self.multi_handle = parent.multi_handle
+            self.curl_perform_task = parent.curl_perform_task
+            self.loop = parent.loop
+        else:
+            self.loop = new_event_loop()
+            self.multi_handle = PyCyrlMuliHander(self.current_config['api']['max_active'], loop=self.loop)
+            self.curl_perform_task = None
+
         cnxprops={'multi_handle': self.multi_handle}
-        if self.api_connect_settings['debug']:
+        if self.current_config['api']['debug']:
             cnxprops.update({
-                'debug': self.api_connect_settings['debug'],
+                'debug': self.current_config['api']['debug'],
                 'debug_filter': self.filter
             })
-        if self.api_connect_settings['sniff']:
+        if self.current_config['api']['sniff']:
             cnxprops.update({
                 'sniff_on_start': True,
                 'sniff_on_connection_fail': True,
@@ -144,25 +155,30 @@ class Context(object):
                 'sniff_on_start': False
             })
 
-        if self.api_connect_settings['user_agent'] is not None:
+        if self.current_config['api']['user_agent'] is not None:
             cnxprops.update({
-                'user_agent': self.api_connect_settings['user_agent'],
+                'user_agent': self.current_config['api']['user_agent'],
             })
 
-        if self.api_connect_settings['username'] is not None and self.api_connect_settings['password'] is not None:
-            http_auth = (self.api_connect_settings['username'], self.api_connect_settings['password'])
+        if self.current_config['api']['username'] is not None and self.current_config['api']['password'] is not None:
+            http_auth = (self.current_config['api']['username'], self.current_config['api']['password'])
         else:
             http_auth = None
-        self.escnx = Elasticsearch(self.api_connect_settings['url'],
+        verify_certs = self.current_config['ssl'].pop('verify_certs')
+        self.escnx = Elasticsearch(self.current_config['api']['url'],
                                    transport_class=AsyncTransport,
                                    connection_class=PyCyrlConnection,
-                                   verify_certs=self.api_connect_settings['verify_certs'],
-                                   ca_certs=self.api_connect_settings['ca_file'],
-                                   kerberos=self.api_connect_settings['kerberos'],
+                                   verify_certs=verify_certs,
+                                   ssl_opts=self.current_config['ssl'],
+                                   kerberos=self.current_config['api']['kerberos'],
                                    http_auth=http_auth, loop=self.loop,
                                    **cnxprops)
-        self.curl_perform_task = ensure_future(self.multi_handle.perform(), loop=self.loop)
-        return self.perform_query(self.escnx.ping())
+        if self.curl_perform_task is None:
+            self.curl_perform_task = ensure_future(self.multi_handle.perform(), loop=self.loop)
+        if parent is None:
+            return self.perform_query(self.escnx.ping())
+        else:
+            return True
 
     def perform_query(self, query):
         def looper():

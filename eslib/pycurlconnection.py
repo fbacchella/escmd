@@ -337,6 +337,7 @@ class PyCyrlConnection(Connection):
      :arg use_ssl: use ssl for the connection if `True`
      :arg verify_certs: whether to verify SSL certificates
      :arg ca_certs: optional path to CA bundle.
+     :arg ssl_opts: a set of options that will be resolved
      :arg debug: activate curl debuging
      :arg debug_filter: sum of curl filters, for debuging
      :arg logger: debug output, can be a file or a logging.Logger
@@ -347,11 +348,19 @@ class PyCyrlConnection(Connection):
     #debug_filter = CurlDebugType.HEADER + CurlDebugType.DATA, debug = False, logger = sys.stderr,
     #** kwargs
 
+    ssl_opts_mapping = {
+        'ca_certs': pycurl.CAINFO,
+        'cert_file': pycurl.SSLCERT,
+        'cert_type': pycurl.SSLCERTTYPE,
+        'key_file': pycurl.SSLKEY,
+        'key_type': pycurl.SSLKEYTYPE,
+        'key_password': pycurl.KEYPASSWD,
+    }
 
     def __init__(self,
                  multi_handle=None,
-                 http_auth=None, kerberos=False, user_agent="eslib",
-                 use_ssl=False, verify_certs=False, ca_certs=None,
+                 http_auth=None, kerberos=False, user_agent="pycurl/eslib",
+                 use_ssl=False, verify_certs=False, ssl_opts={},
                  debug=False, debug_filter=CurlDebugType.HEADER + CurlDebugType.DATA, logger=sys.stderr,
                  **kwargs):
         super(PyCyrlConnection, self).__init__(use_ssl=use_ssl, **kwargs)
@@ -359,9 +368,12 @@ class PyCyrlConnection(Connection):
         self.multi_handle = multi_handle
 
         self.verify_certs = verify_certs
-        self.ca_certs = ca_certs
+        self.ssl_opts = {}
         if use_ssl:
             self.use_ssl = True
+            for k, v in ssl_opts.items():
+                if k in PyCyrlConnection.ssl_opts_mapping and v is not None:
+                    self.ssl_opts[PyCyrlConnection.ssl_opts_mapping[k]] = v
         else:
             self.use_ssl = False
         self.kerberos = kerberos
@@ -400,14 +412,23 @@ class PyCyrlConnection(Connection):
             pycurl.UNRESTRICTED_AUTH: True,
             pycurl.POSTREDIR: pycurl.REDIR_POST_ALL,
         }
-        # Strict TLS check
-        if self.verify_certs:
-            settings.update({
-                pycurl.SSL_VERIFYPEER: 1,
-                pycurl.SSL_VERIFYHOST: 2,
-            })
-        if self.ca_certs is not None:
-            settings[pycurl.CAINFO] = self.ca_certs
+
+        if self.use_ssl:
+            # Strict TLS check
+            if self.verify_certs:
+                settings.update({
+                    pycurl.SSL_VERIFYPEER: 1,
+                    pycurl.SSL_VERIFYHOST: 2,
+                })
+                # If security is wanted, nothing less that TLS v1.2 is accepted, but only for curl  > 7.34.0
+                if version_info.version_num >= 0x072200:
+                    settings[pycurl.SSLVERSION] = pycurl.SSLVERSION_TLSv1_2
+            else:
+                settings.update({
+                    pycurl.SSL_VERIFYPEER: 0,
+                    pycurl.SSL_VERIFYHOST: 0,
+                })
+            settings.update(self.ssl_opts)
 
         if self.kerberos and 'GSS-API' in version_info.features:
             settings.update({
