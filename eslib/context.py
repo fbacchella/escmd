@@ -5,6 +5,7 @@ from eslib.asynctransport import AsyncTransport
 from asyncio import get_event_loop, new_event_loop, ensure_future, wait, FIRST_COMPLETED
 
 import copy
+import urllib.parse
 
 class ConfigurationError(Exception):
     def __init__(self, value):
@@ -52,9 +53,9 @@ class Context(object):
             'ca_file': None,
             'verify_certs': True,
             'cert_file': None,
-            'cert_type': 'PEM',
+            'cert_type': None,
             'key_file': None,
-            'key_type': 'PEM',
+            'key_type': None,
             'key_password': None,
         }
     }
@@ -127,6 +128,16 @@ class Context(object):
             for f in filters:
                 self.filter |= CurlDebugType[f.upper()]
 
+        connect_url = urllib.parse.urlparse(self.current_config['api']['url'])
+        if connect_url[0] != 'https':
+            self.current_config.pop('ssl')
+        else:
+            # Default file format for x509 identity is PEM
+            if self.current_config['ssl'].get('cert_file', None) is not None and self.current_config['ssl'].get('cert_type', None) is None:
+                self.current_config['ssl']['cert_type'] = 'PEM'
+            if self.current_config['ssl'].get('key_file', None) is not None and self.current_config['ssl'].get('key_type', None) is None:
+                self.current_config['ssl']['key_type'] = 'PEM'
+
     def connect(self, parent=None):
         if parent is not None:
             self.multi_handle = parent.multi_handle
@@ -163,12 +174,20 @@ class Context(object):
             http_auth = (self.current_config['api']['username'], self.current_config['api']['password'])
         else:
             http_auth = None
-        verify_certs = self.current_config['ssl'].pop('verify_certs')
+
+        if 'ssl' in self.current_config:
+            ssl_opts = self.current_config['ssl']
+            use_ssl = True
+            verify_certs = self.current_config['ssl'].pop('verify_certs')
+        else:
+            ssl_opts = None
+            use_ssl = False
+            verify_certs = False
+
         self.escnx = Elasticsearch(self.current_config['api']['url'],
                                    transport_class=AsyncTransport,
                                    connection_class=PyCyrlConnection,
-                                   verify_certs=verify_certs,
-                                   ssl_opts=self.current_config['ssl'],
+                                   use_ssl=use_ssl, verify_certs=verify_certs, ssl_opts=ssl_opts,
                                    kerberos=self.current_config['api']['kerberos'],
                                    http_auth=http_auth, loop=self.loop,
                                    **cnxprops)
