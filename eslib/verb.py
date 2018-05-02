@@ -282,8 +282,8 @@ class ReadSettings(DumpVerb):
 
 class WriteSettings(RepeterVerb):
 
-    keyvalue_re = re.compile(r'^([-a-z0-9_\.]+)=(.*)$')
-    keydepth_re = re.compile(r'^([-a-z0-9_]+)(?:\.(.*))?$')
+    keyvalue_re = re.compile(r'^([-a-zA-Z0-9_\.]+)=(.*)$')
+    keydepth_re = re.compile(r'^([-a-zA-Z0-9_]+)(?:\.(.*))?$')
 
     def fill_parser(self, parser):
         parser.add_option('-f', '--settings_file', dest='settings_file_name', default=None)
