@@ -9,6 +9,7 @@ from inspect import isgenerator
 from traceback import print_exception
 from eslib import pycurlconnection
 from eslib.context import Context, ConfigurationError
+import elasticsearch.exceptions
 
 
 def safe_print(string):
@@ -16,6 +17,7 @@ def safe_print(string):
     encoded = codecs.encode(string, sys.stdout.encoding, 'replace')
     decoded = codecs.decode(encoded, sys.stdout.encoding, 'replace')
     print(decoded)
+
 
 def filter_result(cmd, running, result):
     if isinstance(result, str):
@@ -121,6 +123,9 @@ def main():
                 # run the found command and print the result
                 status = print_run_phrase(dispatcher, verb, object_options, object_args)
                 sys.exit(status)
+            except elasticsearch.exceptions.ConnectionError as e:
+                print("failed to connect: ", e.error)
+                return 251
             except eslib.ESLibError as e:
                 print("The action \"%s %s\" failed with \n    %s" % (dispatcher.object_name, verb, e.error_message))
                 return 251

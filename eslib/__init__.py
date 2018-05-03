@@ -14,9 +14,14 @@ class ESLibError(Exception):
         return repr(self.error_message)
 
 
-class ESLibErrorNotFound(ESLibError):
+class ESLibNotFoundError(ESLibError):
     pass
 
+class ESLibTransportError(ESLibError):
+    pass
+
+class ESLibConnectiontError(ESLibError):
+    pass
 
 def join_default(val, default):
     for key in default:
