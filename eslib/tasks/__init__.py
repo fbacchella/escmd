@@ -37,7 +37,7 @@ class TaskTreeNode(TreeNode):
 
 
 @command(TasksDispatcher, verb='tree')
-class TasksList(Verb):
+class TasksTree(Verb):
 
     def fill_parser(self, parser):
         super().fill_parser(parser)
@@ -88,7 +88,7 @@ class TasksList(Verb):
 
 
 @command(TasksDispatcher, verb='dump')
-class IndiciesDump(DumpVerb):
+class TaskDump(DumpVerb):
 
     @coroutine
     def check_verb_args(self, running, *args, actions='', group_by='nodes', **kwargs):
