@@ -4,7 +4,7 @@ import collections
 import re
 from asyncio import coroutine
 from asyncio import ensure_future, wait
-
+import elasticsearch.exceptions
 
 # Find the best implementation available on this platform
 try:
@@ -113,11 +113,13 @@ class RepeterVerb(Verb):
         result = value[1]
         if self.result_is_valid(result):
             return self.format(running, name, result)
+        elif isinstance(result, elasticsearch.exceptions.ElasticsearchException):
+            return "failed %s: %s" % (name, result.info['error']['reason'])
         else:
             return "%s -> %s" % (name, json.dumps(result))
 
     def result_is_valid(self, result):
-        return result.get('acknowledged', False)
+        return not isinstance(result, elasticsearch.exceptions.ElasticsearchException) and result.get('acknowledged', False)
 
     def format(self, running, name, result):
         raise NotImplementedError
