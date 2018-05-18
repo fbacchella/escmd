@@ -39,8 +39,11 @@ class IndiciesList(RepeterVerb):
         val = yield from self.api.escnx.indices.stats(index=element[0])
         return val
 
-    def to_str(self, running, item):
-        for i,j in item['indices'].items():
+    def result_is_valid(self, result):
+        return result.get('indices', None) is not None
+
+    def format(self, running, name, result):
+        for i, j in result['indices'].items():
             return "%s\t%12d\t%4d" % (i,j['primaries']['docs']['count'],j['total']['segments']['count'])
 
 
@@ -60,8 +63,11 @@ class IndiciesForceMerge(RepeterVerb):
         val = yield from self.api.escnx.indices.forcemerge(element[0], max_num_segments=running.max_num_segments, flush=True)
         return val
 
-    def to_str(self, running, value):
-        return "%s -> %s" % (list(running.object.keys())[0], value.__str__())
+    def result_is_valid(self, result):
+        return result.get('_shards',{}).get('failed', -1) == 0
+
+    def format(self, running, name, result):
+        return "%s merged" % name
 
 
 @command(IndiciesDispatcher, verb='delete')
@@ -77,8 +83,8 @@ class IndiciesDelete(RepeterVerb):
         if running.index_name == '*':
             raise Exception("won't destroy everything, -n/--name mandatory")
 
-    def to_str(self, running, value):
-        return "%s -> %s" % (list(running.object.keys())[0], value.__str__())
+    def format(self, running, name, result):
+        return "%s deleted" % name
 
 
 @command(IndiciesDispatcher, verb='reindex')
@@ -256,6 +262,9 @@ class IndiciesWriteSettings(WriteSettings, RepeterVerb):
     def action(self, element, running):
         val = yield from self.api.escnx.indices.put_settings(body=running.values, index=element[0])
         return val
+
+    def format(self, running, name, result):
+        return "%s set" % (name)
 
 
 @command(IndiciesDispatcher, verb='addmapping')

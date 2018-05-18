@@ -5,6 +5,7 @@ import re
 from asyncio import coroutine
 from asyncio import ensure_future, wait
 
+
 # Find the best implementation available on this platform
 try:
     from io import StringIO
@@ -83,6 +84,7 @@ class RepeterVerb(Verb):
         coros = []
         for e in elements:
             task = ensure_future(self.action(e, running), loop=self.api.loop)
+            task.element = e
             coros.append(task)
         if len(coros) > 0:
             done, pending = yield from wait(coros, loop=self.api.loop)
@@ -90,11 +92,10 @@ class RepeterVerb(Verb):
                 for i in done:
                     if i.exception() is not None:
                         ex = i.exception()
-                        #ex.source = i.object
                         ex.context = (type(ex), ex, ex.__traceback__)
                         yield ex
                     else:
-                        yield i.result()
+                        yield (i.element, i.result())
             return enumerator()
         else:
             return None
@@ -106,6 +107,20 @@ class RepeterVerb(Verb):
     @coroutine
     def get_elements(self, running):
         return running.object.items()
+
+    def to_str(self, running, value):
+        name = value[0][0]
+        result = value[1]
+        if self.result_is_valid(result):
+            return self.format(running, name, result)
+        else:
+            return "%s -> %s" % (name, json.dumps(result))
+
+    def result_is_valid(self, result):
+        return result.get('acknowledged', False)
+
+    def format(self, running, name, result):
+        raise NotImplementedError
 
 
 class DumpVerb(RepeterVerb):
@@ -136,7 +151,8 @@ class DumpVerb(RepeterVerb):
         else:
             return (element[0], curs)
 
-    def to_str(self, running, item):
+    def to_str(self, running, result):
+        item = result[1]
         if item is None:
             return None
         elif running.only_keys:
@@ -262,7 +278,8 @@ class ReadSettings(DumpVerb):
             return (element[0], element[1])
 
     def to_str(self, running, item):
-        __, settings = item
+        print(item)
+        __, settings = item[0]
         if len(settings) == 0:
             yield None
         elif len(settings) == 1 and running.flat:
