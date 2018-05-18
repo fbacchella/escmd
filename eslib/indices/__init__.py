@@ -295,3 +295,43 @@ class IndiciesCat(CatVerb):
 
     def get_source(self):
         return self.api.escnx.cat.indices
+
+"""create(**kwargs)
+Create an index in Elasticsearch. http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-create-index.html
+
+Parameters:	
+index – The name of the index
+body – The configuration for the index (settings and mappings)
+master_timeout – Specify timeout for connection to master
+timeout – Explicit operation timeout
+update_all_types – Whether to update the mapping for all fields with the same name across all types or not
+wait_for_active_shards – Set the number of active shards to wait for before the operation returns.
+"""
+
+@command(IndiciesDispatcher, verb='create')
+class IndicesCreate(Verb):
+
+    def fill_parser(self, parser):
+        parser.add_option("-b", "--settingsbody", dest="max_num_segments", help="Max num segmens", default=1)
+
+    @coroutine
+    def check_verb_args(self, running, *args, max_num_segments=1, **kwargs):
+        running.max_num_segments = max_num_segments
+        yield from super().check_verb_args(running, *args, **kwargs)
+
+    @coroutine
+    def get(self, running):
+        return None
+
+    @coroutine
+    def execute(self, running):
+        val = yield from self.api.escnx.indices.create(running.index_name)
+        return val
+
+    def to_str(self, running, value):
+        name = value.get('index', None)
+        status = value.get('acknowledged', False)
+        if status and name is not None:
+            return '%s created' % name
+        else:
+            return dumps(value)
