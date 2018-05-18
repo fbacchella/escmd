@@ -230,17 +230,18 @@ class IndiciesReadSettings(ReadSettings):
                 indices.append((index_name, index_data['settings']['index']))
         return indices
 
-    def to_str(self, running, item):
+    def to_str(self, running, result):
+        item = result[1]
         if len(running.object) > 1:
             if running.flat:
                 k,v = item
                 v = {"%s/%s" % (k, i): j for i,j in v.items()}
-                return super().to_str(running, (k, v))
+                return super().to_str(running, (result[0], (k, v)))
             else:
                 k, v = item
-                return super().to_str(running, ('', {k: v}))
+                return super().to_str(running, (result[0], ('', {k: v})))
         else:
-            return super().to_str(running, item)
+            return super().to_str(running, result)
 
 
 @command(IndiciesDispatcher, verb='writesettings')
