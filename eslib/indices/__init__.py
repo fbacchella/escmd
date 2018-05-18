@@ -290,6 +290,59 @@ class IndiciesAddMapping(RepeterVerb):
         return "%s -> %s" % (list(running.object.keys())[0], value.__str__())
 
 
+@command(IndiciesDispatcher, verb='getfields')
+class IndicesGetFieldMapping(RepeterVerb):
+
+    def fill_parser(self, parser):
+        parser.add_option("-t", "--type", dest="type", help="The type to add the mapping to", default='_default')
+        parser.add_option("-f", "--flat", dest="flat", default=False, action='store_true')
+        parser.add_option("-p", "--pretty", dest="pretty", default=False, action='store_true')
+
+    @coroutine
+    def check_verb_args(self, running, *args, flat=False, type='_default_', **kwargs):
+        running.type = type
+        running.flat = flat
+        yield from super().check_verb_args(running, *args, **kwargs)
+
+    @coroutine
+    def get(self, running):
+        val = yield from self.api.escnx.cat.indices(index=running.index_name, format='json', h='index')
+        return val
+
+    @coroutine
+    def get_elements(self, running):
+        index_names = []
+        for i in running.object:
+            index_names.append((i['index'], None))
+        return index_names
+
+    @coroutine
+    def action(self, element, running):
+        try:
+            val = yield from self.api.escnx.indices.get_mapping(index=element[0], doc_type=running.type)
+            return val
+        except elasticsearch.exceptions.NotFoundError as e:
+            return e
+
+    def result_is_valid(self, result):
+        return not isinstance(result, elasticsearch.exceptions.ElasticsearchException)
+
+    def format(self, running, index, result):
+        mappings = result[index]
+        if running.flat:
+            yield from self.flatten(index, mappings['mappings'][running.type]['properties'])
+        else:
+            yield dumps({index: mappings['mappings'][running.type]['properties']})
+
+    def flatten(self, prefix, fields):
+        separator = '.' if len(prefix) > 0 else ''
+        for k,v in fields.items():
+            if isinstance(v, dict) and 'properties' in v :
+                yield from self.flatten(prefix + separator + str(k), v['properties'])
+            elif isinstance(v, dict)  and 'type' in v :
+                yield prefix + separator + str(k) + ": " + v['type']
+
+
 @command(IndiciesDispatcher)
 class IndiciesCat(CatVerb):
 
