@@ -195,14 +195,12 @@ class CatVerb(List):
         parser.add_option("-H", "--headers", dest="headers", default='*')
         parser.add_option("-f", "--format", dest="format", default='text')
         parser.add_option("-p", "--pretty", dest="pretty", default=False, action='store_true')
-        parser.add_option("-l", "--local", dest="local", default=False, action='store_true')
 
     @coroutine
-    def check_verb_args(self, running, *args, headers='*', format='text', pretty=False, local=False, **kwargs):
-        running.headers = headers
+    def check_verb_args(self, running, *args, headers='*', format='text', pretty=False, **kwargs):
+        running.h = headers
         running.format = format
         running.pretty = pretty
-        running.local = local
         if pretty:
             running.formatting = {'indent': 2, 'sort_keys': True}
         else:

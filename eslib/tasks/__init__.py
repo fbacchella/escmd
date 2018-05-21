@@ -107,3 +107,10 @@ class TaskDump(DumpVerb):
                 task_key = "%s:%s" % (node, id)
                 tasks_dict[task_key] = task
         return tasks_dict.items()
+
+
+@command(TasksDispatcher)
+class TaskCat(CatVerb):
+
+    def get_source(self):
+        return self.api.escnx.cat.tasks

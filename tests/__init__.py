@@ -107,7 +107,6 @@ class DispatchersTestCase(unittest.TestCase):
             self.assertIsInstance(settings, dict)
             for step1 in running.cmd.to_str(running, j):
                 step2 = next(running.cmd.to_str(running, step1))
-                #print('test_read_settings_index_flat', step2)
                 self.assertRegex(step2, '[0-9]+ [a-zA_Z0-9_\.]+: .*')
         self.action_read_settings(dispatcher, ['-f'], tester)
 
@@ -120,7 +119,6 @@ class DispatchersTestCase(unittest.TestCase):
             self.assertIsInstance(settings, dict)
             for step1 in running.cmd.to_str(running, j):
                 step2 = next(running.cmd.to_str(running, step1))
-                #print('test_read_settings_index_flat', step2)
                 self.assertRegex(step2, '[0-9]+ [a-zA_Z0-9_\.]+: 1')
         self.action_read_settings(dispatcher, ['-f', 'number_of_replicas'], tester)
 
@@ -130,12 +128,51 @@ class DispatchersTestCase(unittest.TestCase):
         for j in running.result:
             tester(running, j)
 
-    def test_cat_indices(self):
+    def test_cat_indices_json(self):
         dispatcher = eslib.dispatchers['index']()
         dispatcher.api = self.ctx
         running = self._run_action(dispatcher, 'cat', object_args=['-f', 'json'])
         for i in running.object:
-            pass
+            self.assertIsInstance(i, dict)
+
+    def test_cat_indices_with_headers(self):
+        dispatcher = eslib.dispatchers['index']()
+        dispatcher.api = self.ctx
+        running = self._run_action(dispatcher, 'cat', object_args=['-f', 'json', '-H', 'status,docs.count'])
+        for i in running.object:
+            self.assertEqual(2, len(i))
+            self.assertIsInstance(i, dict)
+            self.assertEqual(2, len(i))
+            self.assertIn('status', i.keys())
+            self.assertIn('docs.count', i.keys())
+
+    def test_cat_nodes_json(self):
+        dispatcher = eslib.dispatchers['node']()
+        dispatcher.api = self.ctx
+        running = self._run_action(dispatcher, 'cat', object_args=['-f', 'json'])
+        for i in running.object:
+            self.assertIsInstance(i, dict)
+
+    def test_cat_template_json(self):
+        dispatcher = eslib.dispatchers['template']()
+        dispatcher.api = self.ctx
+        running = self._run_action(dispatcher, 'cat', object_args=['-f', 'json'])
+        for i in running.object:
+            self.assertIsInstance(i, dict)
+
+    def test_cat_task_json(self):
+        dispatcher = eslib.dispatchers['template']()
+        dispatcher.api = self.ctx
+        running = self._run_action(dispatcher, 'cat', object_args=['-f', 'json'])
+        for i in running.object:
+            self.assertIsInstance(i, dict)
+
+    def test_cat_task_local_json(self):
+        dispatcher = eslib.dispatchers['template']()
+        dispatcher.api = self.ctx
+        running = self._run_action(dispatcher, 'cat', object_args=['-f', 'json', '-l'])
+        for i in running.object:
+            self.assertIsInstance(i, dict)
 
     def test_tree(self):
         for tree_noun in ('shard', 'task'):

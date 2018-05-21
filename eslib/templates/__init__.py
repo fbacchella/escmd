@@ -80,5 +80,14 @@ class TemplatesDelete(RepeterVerb):
 @command(TemplatesDispatcher)
 class TemplatesCat(CatVerb):
 
+    def fill_parser(self, parser):
+        super(TemplatesCat, self).fill_parser(parser)
+        parser.add_option("-l", "--local", dest="local", default=False, action='store_true')
+
+    @coroutine
+    def check_verb_args(self, running, *args, local=False, **kwargs):
+        running.local = local
+        yield from super().check_verb_args(running, *args, **kwargs)
+
     def get_source(self):
         return self.api.escnx.cat.templates
