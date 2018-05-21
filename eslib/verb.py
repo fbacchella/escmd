@@ -212,7 +212,11 @@ class CatVerb(List):
 
     @coroutine
     def get(self, running, **kwargs):
-        val = yield from self.get_source()(format=running.format, h=running.headers, local=running.local)
+        catargs = {}
+        for a in ('format', 'h', 'local', 'nodes'):
+            if hasattr(running, a):
+                catargs[a] = getattr(running, a)
+        val = yield from self.get_source()(**catargs)
         return val
 
     @coroutine
