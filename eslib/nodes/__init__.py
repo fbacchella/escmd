@@ -33,7 +33,6 @@ class NodesList(List):
         yield from super().check_verb_args(running, *args, **kwargs)
 
     def to_str(self, running, item):
-
         value = item[1]
         value.pop('attributes')
         value.pop('build_hash')

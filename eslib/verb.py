@@ -101,7 +101,7 @@ class RepeterVerb(Verb):
             return None
 
     @coroutine
-    def action(self, running):
+    def action(self, element, running):
         raise NotImplementedError
 
     @coroutine
@@ -128,6 +128,7 @@ class RepeterVerb(Verb):
 class DumpVerb(RepeterVerb):
 
     def fill_parser(self, parser):
+        super().fill_parser(parser)
         parser.add_option("-k", "--only_keys", dest="only_keys", default=False, action='store_true')
         parser.add_option("-p", "--pretty", dest="pretty", default=False, action='store_true')
 

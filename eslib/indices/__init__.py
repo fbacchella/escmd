@@ -247,7 +247,7 @@ class IndiciesReadSettings(ReadSettings):
 
 
 @command(IndiciesDispatcher, verb='writesettings')
-class IndiciesWriteSettings(WriteSettings, RepeterVerb):
+class IndiciesWriteSettings(WriteSettings):
 
     @coroutine
     def get(self, running):
