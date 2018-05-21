@@ -50,7 +50,8 @@ class Context(object):
             'principal': None,
         },
         'ssl': {
-            'ca_file': None,
+            'ca_certs_directory': None,
+            'ca_certs_file': None,
             'verify_certs': True,
             'cert_file': None,
             'cert_type': None,

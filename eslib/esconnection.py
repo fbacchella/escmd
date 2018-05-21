@@ -42,7 +42,16 @@ def decode_body(handler, headers, body):
 
 class ElasticConnection(object):
 
-    def __init__(self, base="http://localhost:9200", debug_filter=CurlDebugType.HEADER + CurlDebugType.DATA, insecure=False, verbose=False, ca_file=None, kerberos=None):
+    ssl_opts_mapping = {
+        'cert_file': pycurl.SSLCERT,
+        'cert_type': pycurl.SSLCERTTYPE,
+        'key_file': pycurl.SSLKEY,
+        'key_type': pycurl.SSLKEYTYPE,
+        'key_password': pycurl.KEYPASSWD,
+    }
+
+    def __init__(self, base="http://localhost:9200", debug_filter=CurlDebugType.HEADER + CurlDebugType.DATA, verify_certs=True, verbose=False, ca_file=None, kerberos=None, ssl_opts={}, user_agent=None):
+        print('init ElasticConnection')
         self._curl = pycurl.CurlMulti()
 
         # Activate share settings
@@ -56,10 +65,16 @@ class ElasticConnection(object):
         self.handles = set()
         self.waiting_handles = queue.Queue(1000)
 
-        self.insecure = insecure
-        self.verbose = verbose
+        self.verify_certs = verify_certs
         self.ca_file = ca_file
+        self.verbose = verbose
         self.kerberos = kerberos
+        self.user_agent = user_agent
+        self.ssl_opts = {}
+        for k,v in ssl_opts:
+            if k in ElasticConnection.ssl_opts_mapping and v is not None:
+                self.ssl_opts[ElasticConnection.ssl_opts_mapping[k]] = v
+        print(self.ssl_opts)
 
     def get_curl(self):
         new_curl = pycurl.Curl()
@@ -72,14 +87,9 @@ class ElasticConnection(object):
             pycurl.COOKIEJAR: '/dev/null',
             pycurl.SHARE: self._share,
 
-            # Follow redirect but not too much, it's needed for CAS
+            # Follow redirect but not too much, it's needed for SSO
             pycurl.FOLLOWLOCATION: True,
             pycurl.MAXREDIRS: 5,
-
-            # Strict TLS check
-            pycurl.SSL_VERIFYPEER: not self.insecure,
-            pycurl.SSL_VERIFYHOST: 2,
-            pycurl.CAINFO: self.ca_file,
 
             # Debug setup
             pycurl.VERBOSE: self.verbose,
@@ -89,14 +99,29 @@ class ElasticConnection(object):
             pycurl.HTTPAUTH: pycurl.HTTPAUTH_NEGOTIATE,
             pycurl.USERPWD: ':',
 
-            # Needed for CAS login
+            # Needed for SSO login (like CAS)
             pycurl.UNRESTRICTED_AUTH: True,
             pycurl.POSTREDIR: pycurl.REDIR_POST_ALL,
-            pycurl.USERAGENT: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/603.2.5 (KHTML, like Gecko) Version/10.1.1 Safari/603.2.5 pycurl'
-
         }
-        if self.ca_file is not None:
-            settings['pycurl.CAINFO'] = self.ca_file
+
+        if self.user_agent:
+            settings[pycurl.USERAGENT] = self.user_agent
+
+        settings.update(self.ssl_opts)
+        if self.verify_certs:
+            settings.update({
+                pycurl.SSL_VERIFYPEER: 1,
+                pycurl.SSL_VERIFYHOST: 2,
+                # If security is wanted, nothing less that TLS v1.2 is accepted
+                pycurl.SSLVERSION: pycurl.SSLVERSION_TLSv1_2,
+            })
+            if self.ca_file is not None:
+                pycurl.CAINFO = self.ca_file
+        else:
+            settings.update({
+                pycurl.SSL_VERIFYPEER: 0,
+                pycurl.SSL_VERIFYHOST: 0,
+            })
 
         if self.kerberos:
             settings.update({
