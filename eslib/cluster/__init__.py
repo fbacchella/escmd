@@ -54,20 +54,17 @@ class ClusterHealth(DumpVerb):
 class ClusterReadSettings(ReadSettings):
 
     @coroutine
+    def get_elements(self, running):
+        return (None,)
+
+    @coroutine
     def get(self, running):
         return None
 
     @coroutine
-    def check_verb_args(self, running, *args, flat=False, **kwargs):
-        running.args = args
-        if len(args) > 0:
-            flat = True
-        yield from super().check_verb_args(running, *args, flat=flat,  **kwargs)
-
-    @coroutine
-    def get_elements(self, running):
+    def get_settings(self, running, element):
         val = yield from self.api.escnx.cluster.get_settings(include_defaults=True, flat_settings=running.flat)
-        return val.items()
+        return val
 
 
 @command(ClusterDispatcher, verb='writesettings')

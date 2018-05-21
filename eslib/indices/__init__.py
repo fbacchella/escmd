@@ -210,28 +210,30 @@ class IndiciesDump(DumpVerb):
 class IndiciesReadSettings(ReadSettings):
 
     @coroutine
-    def get(self, running):
+    def get_elements(self, running):
         val = yield from self.api.escnx.cat.indices(index=running.index_name, format='json', h='index')
-        return val
+        return map(lambda x: x['index'], val)
 
     @coroutine
-    def get_elements(self, running):
-        indices = []
-        for i in running.object:
-            index_entry = yield from self.api.escnx.indices.get(index=i['index'], include_defaults=True, flat_settings=running.flat)
-            index_name, index_data = next(iter(index_entry.items()))
-            if running.flat:
-                # remove 'index.' at the beginning of settings names
-                new_settings = {}
-                for k,v in index_data['settings'].items():
-                    new_settings[k.replace('index.', '')] = v
-                indices.append((index_name, new_settings))
-            else:
-                indices.append((index_name, index_data['settings']['index']))
-        return indices
+    def get_settings(self, running, element):
+        # Can't use get_settings filtering of settings, because if settings name are given, or even '_all', flat_settings don't work any more
+        index_entry = yield from self.api.escnx.indices.get_settings(index=element, include_defaults=True, flat_settings=running.flat)
+        #index_entry = yield from self.api.escnx.indices.get(index=element, include_defaults=True, flat_settings=running.flat)
+        index_name, index_data = next(iter(index_entry.items()))
+        new_settings = {}
+        if running.flat:
+            # remove 'index.' at the beginning of settings names
+            new_settings['defaults'] = {k.replace('index.', ''): v for k, v in index_data['defaults'].items()}
+            new_settings['settings'] = {k.replace('index.', ''): v for k, v in index_data['settings'].items()}
+        else:
+            new_settings['defaults'] = index_data['defaults']['index']
+            new_settings['settings'] = index_data['settings']['index']
+        return new_settings
 
-    def to_str(self, running, result):
+    def noto_str(self, running, result):
         item = result[1]
+        print('item:', item)
+        print('name:', result[0])
         if len(running.object) > 1:
             if running.flat:
                 k,v = item

@@ -257,46 +257,41 @@ class ReadSettings(DumpVerb):
         parser.add_option("-f", "--flat", dest="flat", default=False, action='store_true')
 
     @coroutine
-    def get(self):
-        raise NotImplementedError
-
-    @coroutine
     def check_verb_args(self, running, *args, flat=False, **kwargs):
         running.flat = flat if len(args) == 0 else True
-        running.settings = set()
-        for i in args:
-            running.settings.add(i)
+        running.settings = set(args)
         return super().check_verb_args(running, **kwargs)
 
     @coroutine
     def action(self, element, running, *args, only_keys=False, **kwargs):
+        settings = yield from self.get_settings(running, element)
         if len(running.settings) > 0:
             new_settings = {}
-            for k,v in element[1].items():
-                if k in running.settings:
-                    new_settings[k] = v
-            return (element[0], new_settings)
+            for category, values in settings.items():
+                cat_values = {k: v for k,v in values.items() if k in running.settings }
+                if len(cat_values) != 0:
+                    new_settings[category] = cat_values
+            return new_settings
         else:
-            return (element[0], element[1])
+            return settings
 
     def to_str(self, running, item):
-        print(item)
-        __, settings = item[0]
+        source, settings = item
+        # If only one object to be inspected, don't output it's name
+        if running.object is not None and len(running.object) == 1:
+            source = None
         if len(settings) == 0:
             yield None
-        elif len(settings) == 1 and running.flat:
-            yield next(iter(settings.values()))
-        else:
+        elif isinstance(settings, dict):
             if running.flat:
-                for (k, v) in settings.items():
-                    if running.flat:
-                        yield "%s=%s" % (k, v)
+                for i in settings.values():
+                    for k,v in i.items():
+                        yield source, (k,v)
             else:
-                if running.only_keys:
-                    v = json.dumps(list(settings.keys()), **running.formatting)
-                else:
-                    v = json.dumps(settings, **running.formatting)
-                yield str(v)
+                yield json.dumps({source: settings}, **running.formatting)
+        elif isinstance(settings, tuple):
+            prefix = "%s " % source if source is not None else ""
+            yield "%s%s: %s" % (prefix, settings[0], settings[1])
 
 
 class WriteSettings(RepeterVerb):
