@@ -34,9 +34,10 @@ class NodesList(List):
 
     def to_str(self, running, item):
         value = item[1]
-        value.pop('attributes')
-        value.pop('build_hash')
-        return "%s %s" % (value['name'], value)
+        if 'attributes' in value: value.pop('attributes')
+        if 'build_hash' in value: value.pop('build_hash')
+        name = value.pop('name')
+        return "%s %s" % (name, value)
 
 
 @command(NodesDispatcher, verb='dump')
