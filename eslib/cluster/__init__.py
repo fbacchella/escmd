@@ -83,13 +83,23 @@ class ClusterWriteSettings(WriteSettings):
         return super().fill_parser(parser)
 
     @coroutine
+    def get_elements(self, running):
+        return (None,)
+
+    @coroutine
+    def get(self, running):
+        return None
+
+    @coroutine
     def check_verb_args(self, running, *args, persistent=False, transient=True, **kwargs):
         running.destination = 'persistent' if persistent else 'transient'
         yield from super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
-    def execute(self, running):
+    def action(self, element, running):
         values = running.values
         val = yield from self.api.escnx.cluster.put_settings(body={running.destination: values})
         return val
 
+    def format(self, running, name, result):
+        return None

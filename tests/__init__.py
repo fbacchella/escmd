@@ -128,6 +128,21 @@ class DispatchersTestCase(unittest.TestCase):
         for j in running.result:
             tester(running, j)
 
+    def action_write_settings(self, dispatcher, object_args, tester):
+        dispatcher.api = self.ctx
+        running = self._run_action(dispatcher, 'writesettings', object_args=object_args)
+        for j in running.result:
+            tester(running, j)
+
+    def test_write_settings_cluster(self):
+        dispatcher = eslib.dispatchers['cluster']()
+        def tester(running, j):
+            self.assertIsInstance(j, tuple)
+            source, settings = j
+            self.assertIsNone(source)
+            self.assertIsInstance(settings, dict)
+        self.action_write_settings(dispatcher, ['cluster.routing.allocation.enable=none'], tester)
+
     def test_cat_indices_json(self):
         dispatcher = eslib.dispatchers['index']()
         dispatcher.api = self.ctx

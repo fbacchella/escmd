@@ -109,7 +109,10 @@ class RepeterVerb(Verb):
         return running.object.items()
 
     def to_str(self, running, value):
-        name = value[0][0]
+        if value[0] is not None:
+            name = value[0][0]
+        else:
+            name = None
         result = value[1]
         if self.result_is_valid(result):
             return self.format(running, name, result)
@@ -304,10 +307,6 @@ class WriteSettings(RepeterVerb):
 
     def fill_parser(self, parser):
         parser.add_option('-f', '--settings_file', dest='settings_file_name', default=None)
-
-    @coroutine
-    def get(self, running):
-        return None
 
     @coroutine
     def check_verb_args(self, running, *args, settings_file_name=None, **kwargs):
