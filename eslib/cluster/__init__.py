@@ -1,7 +1,7 @@
 from asyncio import coroutine
 
 from eslib.dispatcher import dispatcher, command, Dispatcher
-from eslib.verb import ReadSettings, WriteSettings, DumpVerb
+from eslib.verb import ReadSettings, WriteSettings, DumpVerb, CatVerb
 
 import json
 
@@ -11,6 +11,29 @@ class ClusterDispatcher(Dispatcher):
     @coroutine
     def check_noun_args(self, running):
         pass
+
+
+@command(ClusterDispatcher, verb='master')
+class ClusterMaster(CatVerb):
+
+    def fill_parser(self, parser):
+        super(ClusterMaster, self).fill_parser(parser)
+        parser.add_option("-l", "--local", dest="local", default=False, action='store_true')
+
+    @coroutine
+    def check_verb_args(self, running, *args, local=False, **kwargs):
+        running.local = local
+        running.args = args
+        yield from super().check_verb_args(running, *args, **kwargs)
+
+    def get_source(self):
+        return self.api.escnx.cat.master
+
+    def to_str(self, running, item):
+        if len(running.args) == 1 and isinstance(item, dict):
+            return item[running.args[0]]
+        else:
+            return super(ClusterMaster, self).to_str(running, item)
 
 
 @command(ClusterDispatcher, verb='health')
