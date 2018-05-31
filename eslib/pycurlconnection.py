@@ -124,7 +124,7 @@ def get_header_function(headers):
 content_type_re = re.compile("(?P<content_type>.*?); (?:charset=(?P<charset>.*))")
 
 
-def return_error(status_code, raw_data, content_type='application/json', http_message=None):
+def return_error(status_code, raw_data, content_type='application/json', http_message=None, url=None):
     """ Locate appropriate exception and raise it. """
     error_message = raw_data
     additional_info = None
@@ -141,7 +141,7 @@ def return_error(status_code, raw_data, content_type='application/json', http_me
     elif http_message is not None:
         additional_info = {}
         error_message = http_message
-    return HTTP_EXCEPTIONS.get(status_code, TransportError)(status_code, error_message, additional_info)
+    return HTTP_EXCEPTIONS.get(status_code, TransportError)(status_code, error_message, additional_info, url)
 
 
 def decode_body(handler):
@@ -316,7 +316,7 @@ class PyCyrlMuliHander(object):
                     elif status >= 200 and status < 300:
                         handle.cb(status, handle.headers, decoded)
                     elif status >= 300:
-                        handle.f_cb(return_error(status, decoded, content_type, http_message=handle.headers.pop('__STATUS__')))
+                        handle.f_cb(return_error(status, decoded, content_type, http_message=handle.headers.pop('__STATUS__'), url=handle.getinfo(pycurl.EFFECTIVE_URL)))
                 for handle, code, message in failed:
                     self.handles.remove(handle)
                     handle.f_cb(ConnectionError(code, message, "pycurl failed %s: %d" % (handle.getinfo(pycurl.EFFECTIVE_URL), code)))

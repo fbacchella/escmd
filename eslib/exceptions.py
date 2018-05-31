@@ -14,7 +14,28 @@ class ESLibError(Exception):
 
 
 class ESLibNotFoundError(ESLibError):
-    pass
+    def __init__(self, e, *args, **kwargs):
+        error_info = e.info.pop('error', {})
+        resource_id = error_info.pop('resource.id', None)
+        _id = e.info.pop('_id', None)
+        _index = e.info.pop('_index', None)
+        if resource_id is not None:
+            message="Resource '%s' not found" % resource_id
+        elif _id is not None and _index is not None:
+            message = "Document '%s/%s' not found" % (_index, _id)
+        else:
+            print(e.info)
+            message = "Resource not found"
+        super().__init__(message, *args, exception=e, **kwargs)
+
+
+class ESLibHttpNotFoundError(ESLibError):
+    def __init__(self, e, *args, url=None, **kwargs):
+        if url is not None:
+            message="URL '%s' not found" % url
+        else:
+            message="URL not found"
+        super().__init__(message, *args, exception=e, **kwargs)
 
 # Reserver for non ES-errors (proxy error, 404 not issued by ES
 class ESLibTransportError(ESLibError):

@@ -215,7 +215,15 @@ class Context(object):
             except elasticsearch.exceptions.ConflictError as e:
                 raise eslib.exceptions.ESLibConflictError(e)
             except elasticsearch.exceptions.TransportError as e:
-                if e.status_code == 502:
+                if e.status_code == 404:
+                    if len(e.info) == 0:
+                        url = None
+                        if len(e.args) >= 4:
+                            url = e.args[3]
+                        raise eslib.exceptions.ESLibHttpNotFoundError(e, url=url)
+                    else:
+                        raise eslib.exceptions.ESLibNotFoundError(e)
+                elif e.status_code == 502:
                     raise eslib.exceptions.ESLibProxyError(e)
                 else:
                     raise e

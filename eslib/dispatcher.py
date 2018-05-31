@@ -74,11 +74,8 @@ class Dispatcher(object):
         verb_options = self.clean_options(verb_options)
         yield from cmd.check_noun_args(running, **object_options)
         yield from cmd.check_verb_args(running, *verb_args, **verb_options)
-        try:
-            running.object = yield from cmd.get(running)
-            running.result = yield from cmd.execute(running)
-        except elasticsearch.exceptions.NotFoundError as e:
-            raise ESLibNotFoundError("object not found", object_options, exception=e)
+        running.object = yield from cmd.get(running)
+        running.result = yield from cmd.execute(running)
         return running
 
 
