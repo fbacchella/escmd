@@ -1,9 +1,11 @@
 from configparser import ConfigParser
 from elasticsearch import Elasticsearch
+import elasticsearch.exceptions
 from eslib.pycurlconnection import PyCyrlConnection, CurlDebugType, PyCyrlMuliHander
 from eslib.asynctransport import AsyncTransport
 from asyncio import get_event_loop, new_event_loop, ensure_future, wait, FIRST_COMPLETED
 
+import eslib.exceptions
 import copy
 import urllib.parse
 
@@ -208,7 +210,15 @@ class Context(object):
         # done contain either a result/exception from run_phrase or an exception from multi_handle.perform()
         # In both case, the first result is sufficient
         for i in done:
-            running = i.result()
+            try:
+                running = i.result()
+            except elasticsearch.exceptions.ConflictError as e:
+                raise eslib.exceptions.ESLibConflictError(e)
+            except elasticsearch.exceptions.TransportError as e:
+                if e.status_code == 502:
+                    raise eslib.exceptions.ESLibProxyError(e)
+                else:
+                    raise e
             # If running is None, run_phrase excited with sys.exit, because of argparse
             if running is not None:
                 return running

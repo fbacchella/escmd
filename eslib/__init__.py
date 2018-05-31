@@ -1,28 +1,5 @@
 import re
 
-class ESLibError(Exception):
-    def __init__(self, error_message, value={}, exception=None):
-        self.value = value
-        if error_message is None:
-            self.error_message = value
-        else:
-            self.error_message = error_message
-        if exception is not None:
-            self.exception = exception
-
-    def __str__(self):
-        return repr(self.error_message)
-
-
-class ESLibNotFoundError(ESLibError):
-    pass
-
-class ESLibTransportError(ESLibError):
-    pass
-
-class ESLibConnectiontError(ESLibError):
-    pass
-
 def join_default(val, default):
     for key in default:
         if key not in val:

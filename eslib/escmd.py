@@ -10,6 +10,7 @@ from traceback import print_exception
 from eslib import pycurlconnection
 from eslib.context import Context, ConfigurationError
 import elasticsearch.exceptions
+import eslib.exceptions
 
 
 def safe_print(string):
@@ -126,8 +127,8 @@ def main():
             except elasticsearch.exceptions.ConnectionError as e:
                 print("failed to connect: ", e.error)
                 return 251
-            except eslib.ESLibError as e:
-                print("The action \"%s %s\" failed with \n    %s" % (dispatcher.object_name, verb, e.error_message))
+            except eslib.exceptions.ESLibError as e:
+                print("    The action \"%s %s\" failed with \n%s" % (dispatcher.object_name, verb, e.error_message))
                 return 251
             finally:
                 if context is not None:

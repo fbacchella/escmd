@@ -1,4 +1,4 @@
-from eslib import ESLibError, ESLibNotFoundError, dispatchers
+from eslib.exceptions import ESLibError, ESLibNotFoundError
 from eslib.running import Running
 from asyncio import coroutine
 import elasticsearch.exceptions
