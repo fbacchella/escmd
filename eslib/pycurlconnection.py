@@ -14,7 +14,7 @@ import logging
 
 logger = logging.getLogger('eslib.pycurlconnection')
 
-status_line_re = re.compile(r'HTTP\/\S+\s+\d+\s+(.*?)$')
+status_line_re = re.compile(r'HTTP\/\S+\s+\d+(\s+(?P<status>.*?))?$')
 
 def version_tuple(version):
     if isinstance(version, str):
@@ -92,8 +92,9 @@ def get_header_function(headers):
 
         #Catch the status line, it's the first one
         if not '__STATUS__' in headers_buffer:
-            m = status_line_re.findall(header_line.strip())
-            headers_buffer['__STATUS__'] = m[0]
+            m = status_line_re.fullmatch(header_line.strip())
+            if m is not None:
+                headers_buffer['__STATUS__'] = m.group('status')
             return
 
         # Header lines include the first status line (HTTP/1.x ...).
