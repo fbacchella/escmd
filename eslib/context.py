@@ -3,9 +3,8 @@ from elasticsearch import Elasticsearch
 import elasticsearch.exceptions
 from eslib.pycurlconnection import PyCyrlConnection, CurlDebugType, PyCyrlMuliHander
 from eslib.asynctransport import AsyncTransport
-from asyncio import get_event_loop, new_event_loop, ensure_future, wait, FIRST_COMPLETED
-
 import eslib.exceptions
+from asyncio import new_event_loop, ensure_future, wait, FIRST_COMPLETED
 import copy
 import urllib.parse
 
@@ -27,7 +26,10 @@ class Context(object):
                    'username': ['api', 'username'],
                    'passwordfile': ['api', 'passwordfile'],
                    'kerberos': ['api', 'kerberos'],
-                   'url': ['api', 'url']}
+                   'url': ['api', 'url'],
+                   'transport_class': ['api', 'transport_class'],
+                   'connection_class': ['api', 'connection_class'],
+                   'sniff': ['api', 'sniff']}
 
     # default values for connection
     default_settings = {
@@ -41,7 +43,9 @@ class Context(object):
             'debug': False,
             'log': None,
             'user_agent': 'eslib/pycurl',
-            'max_active': 10
+            'max_active': 10,
+            'transport_class': AsyncTransport,
+            'connection_class': PyCyrlConnection,
         },
         'logging': {
             'filters': 'header,data,text',
@@ -157,6 +161,7 @@ class Context(object):
                 'debug': self.current_config['api']['debug'],
                 'debug_filter': self.filter
             })
+
         if self.current_config['api']['sniff']:
             cnxprops.update({
                 'sniff_on_start': True,
@@ -188,8 +193,8 @@ class Context(object):
             verify_certs = False
 
         self.escnx = Elasticsearch(self.current_config['api']['url'],
-                                   transport_class=AsyncTransport,
-                                   connection_class=PyCyrlConnection,
+                                   transport_class=self.current_config['api']['transport_class'],
+                                   connection_class=self.current_config['api']['connection_class'],
                                    use_ssl=use_ssl, verify_certs=verify_certs, ssl_opts=ssl_opts,
                                    kerberos=self.current_config['api']['kerberos'],
                                    http_auth=http_auth, loop=self.loop,
