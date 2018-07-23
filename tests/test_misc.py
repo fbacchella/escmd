@@ -41,7 +41,7 @@ class MiscTestCase(tests.TestCaseProvider):
             source, settings = j
             self.assertIsNone(source)
             self.assertIsInstance(settings, dict)
-        self.action_write_settings(dispatcher, ['cluster.routing.allocation.enable=none'], tester)
+        self.action_write_settings(dispatcher, ['cluster.routing.allocation.enable=all'], tester)
 
     def test_cat_nodes_json(self):
         dispatcher = eslib.dispatchers['node']()
