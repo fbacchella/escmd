@@ -2,7 +2,6 @@ import unittest
 from eslib import context
 from eslib.pycurlconnection import PyCyrlConnection
 from eslib.asynctransport import AsyncTransport
-import tests.esmock
 
 class TestCaseProvider(unittest.TestCase):
 
