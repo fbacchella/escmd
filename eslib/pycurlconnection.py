@@ -140,7 +140,7 @@ def return_error(status_code, raw_data, content_type='application/json', http_me
         except (ValueError, TypeError) as err:
             logger.warning('Undecodable raw error response from server: %s', err)
     elif http_message is not None:
-        additional_info = {}
+        additional_info = {'elasticerror': False}
         error_message = http_message
     return HTTP_EXCEPTIONS.get(status_code, TransportError)(status_code, error_message, additional_info, url)
 

@@ -221,7 +221,7 @@ class Context(object):
                 raise eslib.exceptions.ESLibConflictError(e)
             except elasticsearch.exceptions.TransportError as e:
                 if e.status_code == 404:
-                    if len(e.info) == 0:
+                    if not e.info.get('elasticerror', True):
                         url = None
                         if len(e.args) >= 4:
                             url = e.args[3]
