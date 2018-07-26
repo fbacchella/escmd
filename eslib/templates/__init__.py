@@ -1,5 +1,9 @@
 from eslib.verb import Verb, List, DumpVerb, RepeterVerb, CatVerb
-import json
+from yaml import load
+try:
+    from yaml import CLoader as Loader, CDumper as Dumper
+except ImportError:
+    from yaml import Loader, Dumper
 from eslib.dispatcher import dispatcher, command, Dispatcher
 from asyncio import coroutine
 
@@ -34,11 +38,14 @@ class TemplatesPut(Verb):
 
     def fill_parser(self, parser):
         parser.add_option("-f", "--template_file", dest="template_file_name", default=None)
+        parser.add_option("-p", "--template_pattern", dest="template_pattern", default=None)
 
     @coroutine
-    def check_verb_args(self, running, *args, template_file_name=None, **kwargs):
+    def check_verb_args(self, running, *args, template_file_name=None, template_pattern=None, **kwargs):
         with open(template_file_name, "r") as template_file:
-            running.template = json.load(template_file)
+            running.template = load(template_file, Loader=Loader)
+        if template_pattern is not None:
+            running.template['template'] = template_pattern
         yield from super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
