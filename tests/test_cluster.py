@@ -41,7 +41,7 @@ class IndicesTestCase(tests.TestCaseProvider):
             self.assertEqual(1, len(settings))
             step1 = next(running.cmd.to_str(running, j))
             step2 = next(running.cmd.to_str(running, step1))
-            self.assertEqual("cluster.name: docker-cluster", step2)
+            self.assertRegex(step2, "cluster.name: .+r")
         self.action_read_settings(dispatcher, ['-f', 'cluster.name'], tester)
 
     def test_cluster_master(self):
