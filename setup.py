@@ -10,8 +10,9 @@ def read(fname):
 
 install_requires = [
     'elasticsearch>=6.1.1',
-    'PycURL>=7.43.0'
-    ]
+    'PycURL>=7.43.0',
+    'PyYaml'
+]
 
 setup(
     name = "EsCmd",
