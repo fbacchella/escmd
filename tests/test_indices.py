@@ -1,6 +1,7 @@
 import eslib
 import json
 import tests
+import elasticsearch.exceptions
 
 
 class IndicesTestCase(tests.TestCaseProvider):
@@ -11,6 +12,25 @@ class IndicesTestCase(tests.TestCaseProvider):
         running = self._run_action(dispatcher, 'cat', object_args=['-f', 'json'])
         for i in running.object:
             self.assertIsInstance(i, dict)
+
+    def test_dump_existing(self):
+        dispatcher = eslib.dispatchers['index']()
+        dispatcher.api = self.ctx
+        running = self._run_action(dispatcher, 'dump', object_options={'name': id(self)})
+        self.assertEqual(1, len(running.object))
+        for i, data in running.object.items():
+            self.assertIsInstance(i, str)
+            self.assertIsInstance(data, dict)
+
+    def test_dump_missing(self):
+        dispatcher = eslib.dispatchers['index']()
+        dispatcher.api = self.ctx
+        try:
+            self._run_action(dispatcher, 'dump', object_options={'name': id(self) + 1 })
+            self.fail("No exception raised")
+        except eslib.exceptions.ESLibNotFoundError as e:
+            self.assertRegex(e.error_message, "Resource '\d+' not found")
+            self.assertIsInstance(e.exception, elasticsearch.exceptions.TransportError)
 
     def test_cat_indices_with_headers(self):
         dispatcher = eslib.dispatchers['index']()
