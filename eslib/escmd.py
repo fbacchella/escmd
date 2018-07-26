@@ -7,7 +7,6 @@ import eslib
 import codecs
 from inspect import isgenerator
 from traceback import print_exception
-from eslib import pycurlconnection
 from eslib.context import Context, ConfigurationError
 import elasticsearch.exceptions
 import eslib.exceptions
