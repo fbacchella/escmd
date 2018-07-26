@@ -228,7 +228,9 @@ class CatVerb(List):
 
     @coroutine
     def get_elements(self, running):
-        if running.format == 'json':
+        if running.object is None:
+            return ()
+        elif running.format == 'json':
             return iter(running.object)
         elif running.format == 'text':
             return running.object.splitlines()
