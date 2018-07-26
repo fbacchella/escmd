@@ -3,15 +3,19 @@ from asyncio import coroutine
 from eslib.verb import List, DumpVerb, CatVerb
 from eslib.dispatcher import dispatcher, command, Dispatcher
 
+import json
 
 @dispatcher(object_name="node")
 class NodesDispatcher(Dispatcher):
 
     def fill_parser(self, parser):
         parser.add_option("-n", "--node", dest="node_name", help="nodes filter")
+        parser.add_option("-l", "--locale", dest="local_node", help="Command runs on local node", default=False, action='store_true')
 
     @coroutine
-    def check_noun_args(self, running, node_name=None):
+    def check_noun_args(self, running, local_node=False, node_name=''):
+        if local_node:
+            node_name = '_all'
         running.node_name = node_name
 
     @coroutine
@@ -45,12 +49,41 @@ class NodesDump(DumpVerb):
 
     def fill_parser(self, parser):
         super().fill_parser(parser)
+
+    @coroutine
+    def check_verb_args(self, running, *args, metrics=[], **kwargs):
+        running.metrics = None
+        yield from super().check_verb_args(running, *args, **kwargs)
+
+
+@command(NodesDispatcher, verb='stats')
+class NodesStats(DumpVerb):
+
+    def fill_parser(self, parser):
+        super().fill_parser(parser)
         parser.add_option("-m", "--metric", dest="metrics", default=[], action='append')
 
     @coroutine
     def check_verb_args(self, running, *args, metrics=[], **kwargs):
         running.metrics = ','.join(metrics)
         yield from super().check_verb_args(running, *args, **kwargs)
+
+    @coroutine
+    def get(self, running):
+        val = yield from self.api.escnx.nodes.info(node_id=running.node_name, metric='settings')
+        nodes = {}
+        for k,v in val['nodes'].items():
+            nodes[k] = v['name']
+        return nodes
+
+    @coroutine
+    def action(self, element, running, *args, only_keys=False, **kwargs):
+        val = yield from self.api.escnx.nodes.stats(element[0], metric=running.metrics, level='node')
+        return val
+
+    def to_str(self, running, value):
+        for k, v in value[1]['nodes'].items():
+            yield "%s: %s" % (value[0][1], json.dumps(v, **running.formatting))
 
 
 @command(NodesDispatcher)
