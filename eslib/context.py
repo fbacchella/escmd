@@ -3,7 +3,8 @@ from elasticsearch import Elasticsearch
 import elasticsearch.exceptions
 from eslib.pycurlconnection import PyCyrlConnection, CurlDebugType, PyCyrlMuliHander
 from eslib.asynctransport import AsyncTransport
-import eslib.exceptions
+from eslib.exceptions import resolve_exception
+from elasticsearch.exceptions import TransportError
 from asyncio import new_event_loop, ensure_future, wait, FIRST_COMPLETED
 import copy
 import urllib.parse
@@ -217,21 +218,8 @@ class Context(object):
         for i in done:
             try:
                 running = i.result()
-            except elasticsearch.exceptions.ConflictError as e:
-                raise eslib.exceptions.ESLibConflictError(e)
-            except elasticsearch.exceptions.TransportError as e:
-                if e.status_code == 404:
-                    if not e.info.get('elasticerror', True):
-                        url = None
-                        if len(e.args) >= 4:
-                            url = e.args[3]
-                        raise eslib.exceptions.ESLibHttpNotFoundError(e, url=url)
-                    else:
-                        raise eslib.exceptions.ESLibNotFoundError(e)
-                elif e.status_code == 502:
-                    raise eslib.exceptions.ESLibProxyError(e)
-                else:
-                    raise e
+            except TransportError as e:
+                raise resolve_exception(e)
             # If running is None, run_phrase excited with sys.exit, because of argparse
             if running is not None:
                 return running

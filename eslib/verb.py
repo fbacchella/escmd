@@ -4,7 +4,8 @@ import collections
 import re
 from asyncio import coroutine
 from asyncio import ensure_future, wait
-import elasticsearch.exceptions
+from elasticsearch.exceptions import TransportError, ElasticsearchException
+from eslib.exceptions import resolve_exception, ESLibError
 
 # Find the best implementation available on this platform
 try:
@@ -93,7 +94,10 @@ class RepeterVerb(Verb):
                     if i.exception() is not None:
                         ex = i.exception()
                         ex.context = (type(ex), ex, ex.__traceback__)
-                        yield ex
+                        if isinstance(ex, TransportError):
+                            yield resolve_exception(ex)
+                        else:
+                            yield ex
                     else:
                         yield (i.element, i.result())
             return enumerator()
@@ -116,13 +120,13 @@ class RepeterVerb(Verb):
         result = value[1]
         if self.result_is_valid(result):
             return self.format(running, name, result)
-        elif isinstance(result, elasticsearch.exceptions.ElasticsearchException):
+        elif isinstance(result, (ElasticsearchException, ESLibError)):
             return "failed %s: %s" % (name, result.info['error']['reason'])
         else:
             return "%s -> %s" % (name, json.dumps(result))
 
     def result_is_valid(self, result):
-        return not isinstance(result, elasticsearch.exceptions.ElasticsearchException) and result.get('acknowledged', False)
+        return not isinstance(result, (ElasticsearchException, ESLibError)) and result.get('acknowledged', False)
 
     def format(self, running, name, result):
         raise NotImplementedError

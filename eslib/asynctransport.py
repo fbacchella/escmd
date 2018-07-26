@@ -1,4 +1,4 @@
-from elasticsearch import Transport, TransportError, ConnectionTimeout
+from elasticsearch import Transport, TransportError, ConnectionTimeout, RequestError
 from asyncio import Future
 
 
@@ -69,6 +69,9 @@ class AsyncTransport(Transport):
 
             try:
                 status, headers_out, data = future_result()
+            except RequestError as e:
+                future.set_exception(e)
+                break
             except TransportError as e:
                 if method == 'HEAD' and e.status_code == 404:
                     future.set_result(False)
@@ -131,7 +134,6 @@ class AsyncTransport(Transport):
                  timeout) = query_iterator.send(curl_future.result)
             except StopIteration:
                 break
-
         return futur_result.result()
 
 

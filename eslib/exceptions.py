@@ -1,3 +1,4 @@
+import elasticsearch.exceptions
 
 class ESLibError(Exception):
     def __init__(self, error_message, value={}, exception=None):
@@ -37,15 +38,24 @@ class ESLibHttpNotFoundError(ESLibError):
             message="URL not found"
         super().__init__(message, *args, exception=e, **kwargs)
 
+
 # Reserver for non ES-errors (proxy error, 404 not issued by ES
 class ESLibTransportError(ESLibError):
     pass
 
+
 class ESLibProxyError(ESLibTransportError):
     pass
 
+
 class ESLibConnectiontError(ESLibError):
     pass
+
+
+class ESLibRequestError(ESLibError):
+    def __init__(self, e, *args, **kwargs):
+        super().__init__(e.info['error']['reason'], *args, exception=e, value=e.info['error'], **kwargs)
+
 
 class ESLibScriptError(ESLibError):
     def __init__(self, e, *args, **kwargs):
@@ -73,3 +83,34 @@ class ESLibConflictError(ESLibError):
             message += "first one:\n%s\n" % failures[0]
         message += "%s\n" % e.info
         super().__init__(message, *args, exception=e, **kwargs)
+
+
+def _get_notfound_error(ex):
+    print(type(ex), ex)
+    if not ex.info.get('elasticerror', True):
+        url = None
+        if len(ex.args) >= 4:
+            url = ex.args[3]
+        return ESLibHttpNotFoundError(ex, url=url)
+    else:
+        return ESLibNotFoundError(ex)
+
+
+def _get_transport_error(e):
+    if e.status_code == 502:
+        return ESLibProxyError(e)
+    else:
+        return e
+
+ex_mapping = {
+        elasticsearch.exceptions.ConflictError: lambda e: ESLibConflictError(e),
+        elasticsearch.exceptions.RequestError: lambda e: ESLibRequestError(e),
+        elasticsearch.exceptions.NotFoundError: lambda e: _get_notfound_error(e),
+        elasticsearch.exceptions.TransportError: lambda e: _get_transport_error(e)
+}
+
+def resolve_exception(ex):
+    if type(ex) in ex_mapping:
+        return ex_mapping[type(ex)](ex)
+    else:
+        return ex
