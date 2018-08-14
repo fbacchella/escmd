@@ -11,7 +11,7 @@ class ESLibError(Exception):
             self.exception = exception
 
     def __str__(self):
-        return repr(self.error_message)
+        return str(self.error_message)
 
 
 class ESLibNotFoundError(ESLibError):

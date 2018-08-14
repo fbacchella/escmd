@@ -22,27 +22,22 @@ def safe_print(string):
 def filter_result(cmd, running, result):
     if isinstance(result, str):
         safe_print(result)
-        return cmd.status()
     elif isgenerator(result):
         # If execute return a generator, iterate other it
         for s in result:
             if isinstance(s, Exception):
+                message = str(s)
                 if hasattr(s, 'source'):
-                    print('Exception from source "%s":' % s.source, file=sys.stderr)
-                print_exception(type(s), s, s.__traceback__, file=sys.stderr)
+                    message = "%s%s" % ('Exception from source "%s":' % s.source, message)
+                raise eslib.exceptions.ESLibError(message)
             elif s != None:
                 filter_result(cmd, running, s)
-        return cmd.status()
     elif result is not None and result is not False:
         # Else if it return something, just print it
-        return filter_result(cmd, running, cmd.to_str(running, result))
+        filter_result(cmd, running, cmd.to_str(running, result))
     elif result is not None:
         # It return false, something went wrong
-        print("'%s %s' failed" % (result.object_name, cmd.verb))
-        return cmd.status()
-    else:
-        # It returned nothing, it should be OK.
-        return 0
+        raise eslib.exceptions.ESLibError("'%s %s' failed" % (result.object_name, cmd.verb))
 
 
 def print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
@@ -51,9 +46,7 @@ def print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
     if running is not None:
         cmd = running.cmd
         result = running.result
-        return filter_result(cmd, running, result)
-    else:
-        return 0
+        filter_result(cmd, running, result)
 
 
 # needed because dict.update is using shortcuts and don't works on subclass of dict
@@ -89,7 +82,7 @@ def main():
     try:
         context = Context(**context_args)
     except ConfigurationError as e:
-        print(e.error_message)
+        print(e.error_message, file=sys.stderr)
         return 253
 
     if len(args) > 0:
@@ -99,7 +92,7 @@ def main():
         if object_name in eslib.dispatchers:
             dispatcher = eslib.dispatchers[object_name]()
         else:
-            print(('unknown object: %s' % object_name))
+            print(('unknown object: %s' % object_name), file=sys.stderr)
             return 253
         #The object parser
         parser_object = optparse.OptionParser()
@@ -121,21 +114,21 @@ def main():
                         del object_options[k]
 
                 # run the found command and print the result
-                status = print_run_phrase(dispatcher, verb, object_options, object_args)
-                sys.exit(status)
+                print_run_phrase(dispatcher, verb, object_options, object_args)
+                return 0
             except elasticsearch.exceptions.ConnectionError as e:
-                print("failed to connect: ", e.error)
+                print("failed to connect: ", e.error, file=sys.stderr)
                 return 251
             except eslib.exceptions.ESLibError as e:
-                print("    The action \"%s %s\" failed with \n%s" % (dispatcher.object_name, verb, e.error_message))
+                print("    The action \"%s %s\" failed with \n%s" % (dispatcher.object_name, verb, e.error_message), file=sys.stderr)
                 return 251
             finally:
                 if context is not None:
                     context.disconnect()
         else:
-            print('verb missing')
+            print('verb missing', file=sys.stderr)
     else:
-        print('object missing')
+        print('object missing', file=sys.stderr)
     return 253
 
 def main_wrap():

@@ -65,9 +65,6 @@ class Verb(object):
         else:
             return str(value)
 
-    def status(self):
-        """A default status command to run on success"""
-        return 0;
 
 class RepeterVerb(Verb):
 
