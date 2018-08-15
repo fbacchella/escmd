@@ -26,10 +26,9 @@ def filter_result(cmd, running, result):
         # If execute return a generator, iterate other it
         for s in result:
             if isinstance(s, Exception):
-                message = str(s)
                 if hasattr(s, 'source'):
-                    message = "%s%s" % ('Exception from source "%s":' % s.source, message)
-                raise eslib.exceptions.ESLibError(message)
+                    print('Exception from source "%s":' % s.source, file=sys.stderr)
+                print_exception(type(s), s, s.__traceback__, file=sys.stderr)
             elif s != None:
                 filter_result(cmd, running, s)
     elif result is not None and result is not False:
