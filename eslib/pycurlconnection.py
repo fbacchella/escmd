@@ -1,5 +1,5 @@
 from elasticsearch import Connection, ConnectionError, TransportError
-from elasticsearch.exceptions import HTTP_EXCEPTIONS
+from elasticsearch.exceptions import HTTP_EXCEPTIONS, ConnectionTimeout
 import pycurl
 from io import BytesIO
 from elasticsearch.compat import urlencode
@@ -320,7 +320,11 @@ class PyCyrlMuliHander(object):
                         handle.f_cb(return_error(status, decoded, content_type, http_message=handle.headers.pop('__STATUS__'), url=handle.getinfo(pycurl.EFFECTIVE_URL)))
                 for handle, code, message in failed:
                     self.handles.remove(handle)
-                    handle.f_cb(ConnectionError(code, message, "pycurl failed %s: %d" % (handle.getinfo(pycurl.EFFECTIVE_URL), code)))
+                    if code == 28:
+                        ex = ConnectionTimeout(code, message, handle.getinfo(pycurl.EFFECTIVE_URL), handle.getinfo(pycurl.TOTAL_TIME))
+                    else:
+                        ex = ConnectionError(code, message, "pycurl failed %s: %d" % (handle.getinfo(pycurl.EFFECTIVE_URL), code))
+                    handle.f_cb(ex)
 
 
 class PyCyrlConnection(Connection):
@@ -361,13 +365,14 @@ class PyCyrlConnection(Connection):
 
     def __init__(self,
                  multi_handle=None,
-                 http_auth=None, kerberos=False, user_agent="pycurl/eslib",
+                 http_auth=None, kerberos=False, user_agent="pycurl/eslib", timeout=10,
                  use_ssl=False, verify_certs=False, ssl_opts={},
                  debug=False, debug_filter=CurlDebugType.HEADER + CurlDebugType.DATA, logger=sys.stderr,
                  **kwargs):
-        super(PyCyrlConnection, self).__init__(use_ssl=use_ssl, **kwargs)
+        super(PyCyrlConnection, self).__init__(use_ssl=use_ssl, timeout=timeout, **kwargs)
 
         self.multi_handle = multi_handle
+        self.timeout = timeout
 
         self.verify_certs = verify_certs
         self.ssl_opts = {}
@@ -396,6 +401,7 @@ class PyCyrlConnection(Connection):
         settings = {
             pycurl.USERAGENT: self.user_agent,
             pycurl.ACCEPT_ENCODING: None if self.debug else "",
+            pycurl.TIMEOUT: self.timeout,
             #pycurl.NOSIGNAL: True,
             # We manage ourself our buffer, Help from Nagle is not needed
             pycurl.TCP_NODELAY: 1,
@@ -467,7 +473,7 @@ class PyCyrlConnection(Connection):
 
         return handle
 
-    def perform_request(self, method, url, params=None, body=None, timeout=None, headers={}, ignore=(), future=None):
+    def perform_request(self, method, url, params=None, body=None, headers={}, ignore=(), future=None):
         url = self.url_prefix + url
         if params is not None:
             url = '%s?%s' % (url, urlencode(params))

@@ -30,7 +30,8 @@ class Context(object):
                    'url': ['api', 'url'],
                    'transport_class': ['api', 'transport_class'],
                    'connection_class': ['api', 'connection_class'],
-                   'sniff': ['api', 'sniff']}
+                   'sniff': ['api', 'sniff'],
+                   'timeout': ['api', 'timeout']}
 
     # default values for connection
     default_settings = {
@@ -45,6 +46,7 @@ class Context(object):
             'log': None,
             'user_agent': 'eslib/pycurl',
             'max_active': 10,
+            'timeout': 10,
             'transport_class': AsyncTransport,
             'connection_class': PyCyrlConnection,
         },
@@ -156,7 +158,8 @@ class Context(object):
             self.multi_handle = PyCyrlMuliHander(self.current_config['api']['max_active'], loop=self.loop)
             self.curl_perform_task = None
 
-        cnxprops={'multi_handle': self.multi_handle}
+        cnxprops={'multi_handle': self.multi_handle,
+                  'timeout': self.current_config['api']['timeout']}
         if self.current_config['api']['debug']:
             cnxprops.update({
                 'debug': self.current_config['api']['debug'],

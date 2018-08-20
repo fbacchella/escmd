@@ -52,6 +52,13 @@ class ESLibConnectiontError(ESLibError):
     pass
 
 
+class ESLibTimeoutError(ESLibTransportError):
+    def __init__(self, e):
+        self.url = e.info
+        self.duration = e.args[3]
+        super().__init__(e.error, exception=e)
+
+
 class ESLibRequestError(ESLibError):
     def __init__(self, e, *args, **kwargs):
         super().__init__(e.info['error']['reason'], *args, exception=e, value=e.info['error'], **kwargs)
@@ -106,7 +113,8 @@ ex_mapping = {
         elasticsearch.exceptions.ConflictError: lambda e: ESLibConflictError(e),
         elasticsearch.exceptions.RequestError: lambda e: ESLibRequestError(e),
         elasticsearch.exceptions.NotFoundError: lambda e: _get_notfound_error(e),
-        elasticsearch.exceptions.TransportError: lambda e: _get_transport_error(e)
+        elasticsearch.exceptions.TransportError: lambda e: _get_transport_error(e),
+        elasticsearch.exceptions.ConnectionTimeout: lambda e: ESLibTimeoutError(e),
 }
 
 def resolve_exception(ex):

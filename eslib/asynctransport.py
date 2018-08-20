@@ -121,8 +121,7 @@ class AsyncTransport(Transport):
             curl_future = Future(loop=self.loop)
             yield from connection.perform_request(method, next_url, next_params, next_body,
                                                        headers=next_headers,
-                                                       ignore=ignore,
-                                                       timeout=timeout, future=curl_future)
+                                                       ignore=ignore, future=curl_future)
             try:
                 (connection,
                  next_method,
