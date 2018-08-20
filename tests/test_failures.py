@@ -2,7 +2,7 @@ import unittest
 from eslib import context, dispatchers
 from eslib.pycurlconnection import PyCyrlConnection
 from eslib.asynctransport import AsyncTransport
-from eslib.exceptions import ESLibTimeoutError
+from eslib.exceptions import ESLibTimeoutError, ESLibConnectionError
 
 class TestESFailures(unittest.TestCase):
 
@@ -10,13 +10,29 @@ class TestESFailures(unittest.TestCase):
         transport_class = AsyncTransport
         connection_class = PyCyrlConnection
         try:
-            self.ctx = context.Context(url='http://169.254.169.254:9200', sniff=False, debug=False, transport_class=transport_class,
+            self.ctx = context.Context(url='http://169.254.169.253:9200', sniff=False, debug=False, transport_class=transport_class,
                                        timeout=1,
                                        connection_class=connection_class)
             self.ctx.connect()
             self.fail()
         except ESLibTimeoutError as ex:
             self.assertIsInstance(ex.duration, float)
+        finally:
+            self.ctx.disconnect()
+
+
+    def test_cnx_refused(self):
+        transport_class = AsyncTransport
+        connection_class = PyCyrlConnection
+        try:
+            self.ctx = context.Context(url='http://169.254.169.254:9200', sniff=False, debug=False,
+                                       transport_class=transport_class,
+                                       timeout=1,
+                                       connection_class=connection_class)
+            self.ctx.connect()
+            self.fail()
+        except ESLibConnectionError as ex:
+            self.assertIsInstance(ex.url, str)
         finally:
             self.ctx.disconnect()
 

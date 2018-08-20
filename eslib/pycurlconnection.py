@@ -127,6 +127,7 @@ content_type_re = re.compile("(?P<content_type>.*?); (?:charset=(?P<charset>.*))
 
 def return_error(status_code, raw_data, content_type='application/json', http_message=None, url=None):
     """ Locate appropriate exception and raise it. """
+
     error_message = raw_data
     additional_info = None
     if raw_data and content_type == 'application/json':
@@ -323,7 +324,7 @@ class PyCyrlMuliHander(object):
                     if code == 28:
                         ex = ConnectionTimeout(code, message, handle.getinfo(pycurl.EFFECTIVE_URL), handle.getinfo(pycurl.TOTAL_TIME))
                     else:
-                        ex = ConnectionError(code, message, "pycurl failed %s: %d" % (handle.getinfo(pycurl.EFFECTIVE_URL), code))
+                        ex = ConnectionError(code, message, handle.getinfo(pycurl.EFFECTIVE_URL))
                     handle.f_cb(ex)
 
 
