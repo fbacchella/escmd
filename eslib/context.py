@@ -130,7 +130,7 @@ class Context(object):
         if self.current_config['api']['url'] == None:
             raise ConfigurationError('incomplete configuration, Elastic url not found')
         if self.current_config['api']['username'] is None and self.current_config['api']['kerberos'] is None:
-            raise ConfigurationError('not enought authentication informations')
+            raise ConfigurationError('not enough authentication informations')
 
         if self.current_config['logging']['filters'] is not None and self.current_config['api']['debug']:
             self.filter = 0

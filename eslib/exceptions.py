@@ -64,6 +64,17 @@ class ESLibTimeoutError(ESLibConnectionError):
         super().__init__(exception=exception)
 
 
+class ESLibAuthorizationException(ESLibError):
+
+    def __init__(self, e, *args, **kwargs):
+        super().__init__(e.info['error']['reason'], *args, exception=e, value=e.info['error'], **kwargs)
+
+
+class ESLibBatchError(ESLibError):
+
+    def __init__(self, e, *args, **kwargs):
+        failures = e.info['failures']
+        super().__init__('%d Error%s in batch' % (len(failures), 's' if len(failures) > 0 else ''), *args, exception=e, value='Batch error', **kwargs)
 
 
 class ESLibRequestError(ESLibError):
@@ -121,11 +132,14 @@ ex_mapping = {
         elasticsearch.exceptions.RequestError: lambda e: ESLibRequestError(e),
         elasticsearch.exceptions.NotFoundError: lambda e: _get_notfound_error(e),
         elasticsearch.exceptions.TransportError: lambda e: _get_transport_error(e),
+        elasticsearch.exceptions.AuthorizationException: lambda e: ESLibAuthorizationException(e),
         elasticsearch.exceptions.ConnectionTimeout: lambda e: ESLibTimeoutError(e),
         elasticsearch.exceptions.ConnectionError: lambda e: ESLibConnectionError(e),
 }
 
 def resolve_exception(ex):
+    if isinstance(ex, elasticsearch.exceptions.TransportError) and 'failures' in ex.info:
+        return ESLibBatchError(ex)
     if type(ex) in ex_mapping:
         return ex_mapping[type(ex)](ex)
     else:

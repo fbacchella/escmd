@@ -9,7 +9,7 @@ from inspect import isgenerator
 from traceback import print_exception
 from eslib.context import Context, ConfigurationError
 import elasticsearch.exceptions
-import eslib.exceptions
+from eslib.exceptions import ESLibError
 
 
 def safe_print(string):
@@ -25,7 +25,9 @@ def filter_result(cmd, running, result):
     elif isgenerator(result):
         # If execute return a generator, iterate other it
         for s in result:
-            if isinstance(s, Exception):
+            if isinstance(s, ESLibError):
+                print(s)
+            elif isinstance(s, Exception):
                 if hasattr(s, 'source'):
                     print('Exception from source "%s":' % s.source, file=sys.stderr)
                 print_exception(type(s), s, s.__traceback__, file=sys.stderr)
@@ -36,7 +38,7 @@ def filter_result(cmd, running, result):
         filter_result(cmd, running, cmd.to_str(running, result))
     elif result is not None:
         # It return false, something went wrong
-        raise eslib.exceptions.ESLibError("'%s %s' failed" % (result.object_name, cmd.verb))
+        raise ESLibError("'%s %s' failed" % (result.object_name, cmd.verb))
 
 
 def print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
@@ -118,7 +120,7 @@ def main():
             except elasticsearch.exceptions.ConnectionError as e:
                 print("failed to connect: ", e.error, file=sys.stderr)
                 return 251
-            except eslib.exceptions.ESLibError as e:
+            except ESLibError as e:
                 print("    The action \"%s %s\" failed with \n%s" % (dispatcher.object_name, verb, e.error_message), file=sys.stderr)
                 return 251
             finally:

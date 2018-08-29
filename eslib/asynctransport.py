@@ -1,4 +1,4 @@
-from elasticsearch import Transport, TransportError, ConnectionTimeout, RequestError
+from elasticsearch import Transport, TransportError, ConnectionTimeout, RequestError, AuthorizationException
 from asyncio import Future
 
 
@@ -69,7 +69,7 @@ class AsyncTransport(Transport):
 
             try:
                 status, headers_out, data = future_result()
-            except RequestError as e:
+            except (RequestError, AuthorizationException) as e:
                 future.set_exception(e)
                 break
             except TransportError as e:

@@ -1,5 +1,6 @@
 from eslib.verb import Verb, DumpVerb, RepeterVerb, ReadSettings, WriteSettings, CatVerb
 from eslib.dispatcher import dispatcher, command, Dispatcher
+from eslib.exceptions import ESLibError
 from asyncio import coroutine
 import re
 from json import dumps, load
@@ -130,13 +131,13 @@ class IndiciesReindex(RepeterVerb):
             if len(match.groups()) == 1:
                 infix = match.group(1)
             else:
-                raise Exception('invalid matching pattern ')
+                raise ESLibError('invalid matching pattern')
         else:
             infix = index_name
         new_index_name = running.prefix + infix + running.suffix
         v = yield from self.api.escnx.indices.exists(index=new_index_name)
         if v:
-            return (new_index_name, 'does exists')
+            raise ESLibError('%s already exists' % new_index_name)
         if running.mappings is None:
             print("reusing mapping")
             mappings = index['mappings']
