@@ -75,6 +75,7 @@ def main():
     parser.add_option("-u", "--user", "--username", dest="username", help="User to authenticate")
     parser.add_option("-k", "--kerberos", dest="kerberos", help="Uses kerberos authentication", action='store_true')
     parser.add_option("-U", "--url", dest="url", help="URL to connect to", default=None)
+    parser.add_option("-t", "--timeout", dest="timeout", help="Connection timeout", default=10, type=int)
 
     (options, args) = parser.parse_args()
 

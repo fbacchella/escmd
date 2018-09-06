@@ -21,6 +21,9 @@ class Context(object):
     # The settings that store boolean values
     boolean_options = {'api': frozenset(['debug', 'kerberos', 'sniff']), 'logging': {}, 'kerberos': {}, 'ssl': frozenset(['verify_certs']), 'pycurl': {}}
 
+    # The settings that store integer values
+    integer_options = {'api': frozenset(['timeout', 'max_active']), 'logging': {}, 'kerberos': {}, 'ssl': {}, 'pycurl': {}}
+
     # mapping from command line options to configuration options:
     arg_options = {'debug': ['api', 'debug'],
                    'username': ['api', 'username'],
@@ -96,6 +99,8 @@ class Context(object):
             for k,v in config.items(section):
                 if k in Context.boolean_options[section]:
                     self.current_config[section][k] = config.getboolean(section, k)
+                elif k in Context.integer_options[section]:
+                    self.current_config[section][k] = config.getint(section, k)
                 else:
                     self.current_config[section][k] = v
 
