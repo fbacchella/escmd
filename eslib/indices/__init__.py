@@ -98,7 +98,7 @@ class IndiciesReindex(RepeterVerb):
         parser.add_option("-i", "--infix_regex", dest="infix_regex", default=None)
 
     @coroutine
-    def check_verb_args(self, running, *args, template_name=None, infix_regex=None, prefix='', suffix='', **kwargs):
+    def check_verb_args(self, running, *args, template_name=None, infix_regex=None, prefix='', suffix='', keep_mapping=False, **kwargs):
         running.settings = {}
         running.mappings = None
         running.old_replica = None
@@ -128,7 +128,7 @@ class IndiciesReindex(RepeterVerb):
         index = element[1]
         if running.infix_regex is not None:
             match = running.infix_regex.match(index_name)
-            if len(match.groups()) == 1:
+            if match is not None and len(match.groups()) == 1:
                 infix = match.group(1)
             else:
                 raise ESLibError('invalid matching pattern')
@@ -138,6 +138,7 @@ class IndiciesReindex(RepeterVerb):
         v = yield from self.api.escnx.indices.exists(index=new_index_name)
         if v:
             raise ESLibError('%s already exists' % new_index_name)
+
         if running.mappings is None:
             print("reusing mapping")
             mappings = index['mappings']
@@ -151,16 +152,10 @@ class IndiciesReindex(RepeterVerb):
         for k in 'creation_date', 'uuid', 'provided_name':
             if k in settings.get('index'):
                 del settings.get('index')[k]
-        settings.get('index', {}).get('version', {'created': None}).pop('created')
+        settings.get('index', {}).pop('version', None)
 
         # Create the index with an empty mapping
-        yield from self.api.escnx.indices.create(index=new_index_name, body={'settings': settings, "mappings": {}})
-
-        # Moving mapping
-        for i in mappings.keys():
-            print("adding mapping for type", i)
-            yield from self.api.escnx.indices.put_mapping(doc_type=i, index=new_index_name, body=mappings[i],
-                                               update_all_types=True)
+        yield from self.api.escnx.indices.create(index=new_index_name, body={'settings': settings, "mappings": mappings})
 
         # Doing the reindexation
         reindex_status = yield from self.api.escnx.reindex(
@@ -195,11 +190,7 @@ class IndiciesReindex(RepeterVerb):
                     {'add': {'index': new_index_name, 'alias': index_name}}
                 ]
             })
-        yield from self.api.escnx.indices.forcemerge(element[0], max_num_segments=1, flush=True)
-        return (index_name, reindex_status)
-
-    def to_str(self, running, value):
-        return dumps({value[0]: value[1]})
+        return reindex_status
 
 
 @command(IndiciesDispatcher, verb='dump')

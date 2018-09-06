@@ -95,3 +95,18 @@ class IndicesTestCase(tests.TestCaseProvider):
             self.assertIn('successful', shards)
             self.assertIn('failed', shards)
             self.assertIn('total', shards)
+
+    def test_reindex(self):
+        dispatcher = eslib.dispatchers['index']()
+        dispatcher.api = self.ctx
+        running = self._run_action(dispatcher, 'reindex', object_options={'name': id(self)}, object_args=['-s','_0'])
+        self.assertEqual(1, len(running.object))
+        for i, data in running.object.items():
+            self.assertIsInstance(i, str)
+            self.assertIsInstance(data, dict)
+        for i in running.result:
+            print(i)
+            index, data = i
+            self.assertIsInstance(data, dict)
+            self.assertEqual(len(data), 14)
+            self.assertEqual(len(data['failures']), 0)
