@@ -5,6 +5,7 @@ from eslib.dispatcher import dispatcher, command, Dispatcher
 
 import json
 
+
 @dispatcher(object_name="node")
 class NodesDispatcher(Dispatcher):
 

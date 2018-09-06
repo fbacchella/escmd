@@ -1,6 +1,5 @@
 from configparser import ConfigParser
 from elasticsearch import Elasticsearch
-import elasticsearch.exceptions
 from eslib.asynctransport import AsyncTransport
 from eslib.exceptions import resolve_exception
 from elasticsearch.exceptions import TransportError
@@ -10,7 +9,7 @@ import urllib.parse
 
 class ConfigurationError(Exception):
     def __init__(self, value):
-        super(Exception, self).__init__(value)
+        super(ConfigurationError, self).__init__(value)
         self.error_message = value
 
     def __str__(self):
@@ -79,6 +78,8 @@ class Context(object):
     def __init__(self, config_file=None, **kwargs):
         super(Context, self).__init__()
         self.connected = False
+
+        # Check consistency of authentication setup
         explicit_user = 'password' in kwargs or 'passwordfile' in kwargs or 'username' in kwargs
         explicit_kerberos = 'kerberos' in kwargs and kwargs.get('kerberos')
         if explicit_user and explicit_kerberos:
@@ -103,7 +104,6 @@ class Context(object):
                     self.current_config[section][k] = config.getint(section, k)
                 else:
                     self.current_config[section][k] = v
-
 
         # extract values from explicit arguments or else from config file
         for arg_name, arg_destination in Context.arg_options.items():

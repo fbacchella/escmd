@@ -231,21 +231,6 @@ class IndiciesReadSettings(ReadSettings):
             new_settings['settings'] = index_data['settings']['index']
         return new_settings
 
-    def noto_str(self, running, result):
-        item = result[1]
-        print('item:', item)
-        print('name:', result[0])
-        if len(running.object) > 1:
-            if running.flat:
-                k,v = item
-                v = {"%s/%s" % (k, i): j for i,j in v.items()}
-                return super().to_str(running, (result[0], (k, v)))
-            else:
-                k, v = item
-                return super().to_str(running, (result[0], ('', {k: v})))
-        else:
-            return super().to_str(running, result)
-
 
 @command(IndiciesDispatcher, verb='writesettings')
 class IndiciesWriteSettings(WriteSettings):

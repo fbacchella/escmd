@@ -16,6 +16,7 @@ logger = logging.getLogger('eslib.pycurlconnection')
 
 status_line_re = re.compile(r'HTTP\/\S+\s+\d+(\s+(?P<status>.*?))?$')
 
+
 def version_tuple(version):
     if isinstance(version, str):
         return tuple(map(int, (version.split("."))))
@@ -68,6 +69,7 @@ def set_version_info():
                 features.add(features_mapping.get(i, i))
     version_info.features = features
     return version_info
+
 
 version_info = set_version_info()
 
@@ -161,7 +163,10 @@ def decode_body(handler):
         if result is not None:
             encoding = result.group('charset')
             content_type = result.group('content_type')
-    body = handler.buffer.getvalue().decode(encoding)
+    if content_type is not None and (content_type.startswith('text') or 'json' in content_type):
+        body = handler.buffer.getvalue().decode(encoding, 'replace')
+    else:
+        body = handler.buffer.getvalue()
     return (content_type, body)
 
 
@@ -196,9 +201,9 @@ def get_curl_debug(debug_filter, logger):
         # provided data and convert it to strings before trying to
         # manipulate it with the "replace", "strip" and "split" methods:
         if not debug_type == pycurl.INFOTYPE_SSL_DATA_IN and not pycurl.INFOTYPE_SSL_DATA_OUT:
-            text = data.decode('utf-8') if type(data) == bytes else data
+            text = data.decode('utf-8', 'replace') if type(data) == bytes else data
         else:
-            text = data.decode('unicode_escape') if type(data) == bytes else data
+            text = data.decode('unicode_escape', 'replace') if type(data) == bytes else data
 
         # Split the debug data into lines and send a debug message for
         # each line:
@@ -311,6 +316,7 @@ class PyCyrlMultiHander(object):
                 for handle in succeded:
                     self.handles.remove(handle)
                     status = handle.getinfo(pycurl.RESPONSE_CODE)
+                    self.multi.remove_handle(handle)
                     content_type, decoded = decode_body(handle)
                     if not self.running:
                         # is stopped, just swallow content
@@ -321,6 +327,7 @@ class PyCyrlMultiHander(object):
                         handle.f_cb(return_error(status, decoded, content_type, http_message=handle.headers.pop('__STATUS__'), url=handle.getinfo(pycurl.EFFECTIVE_URL)))
                 for handle, code, message in failed:
                     self.handles.remove(handle)
+                    self.multi.remove_handle(handle)
                     if code == 28:
                         ex = ConnectionTimeout(code, message, handle.getinfo(pycurl.EFFECTIVE_URL), handle.getinfo(pycurl.TOTAL_TIME))
                     else:

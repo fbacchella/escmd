@@ -74,7 +74,6 @@ class ElasticConnection(object):
         for k,v in ssl_opts:
             if k in ElasticConnection.ssl_opts_mapping and v is not None:
                 self.ssl_opts[ElasticConnection.ssl_opts_mapping[k]] = v
-        print(self.ssl_opts)
 
     def get_curl(self):
         new_curl = pycurl.Curl()
