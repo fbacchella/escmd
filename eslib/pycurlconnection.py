@@ -211,7 +211,7 @@ def get_curl_debug(debug_filter, logger):
     return _curl_debug
 
 
-class PyCyrlMuliHander(object):
+class PyCyrlMultiHander(object):
 
     def __init__(self, max_query=10, loop=get_event_loop()):
         self.loop = loop

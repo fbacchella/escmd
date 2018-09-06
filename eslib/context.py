@@ -1,7 +1,6 @@
 from configparser import ConfigParser
 from elasticsearch import Elasticsearch
 import elasticsearch.exceptions
-from eslib.pycurlconnection import PyCyrlConnection, CurlDebugType, PyCyrlMuliHander
 from eslib.asynctransport import AsyncTransport
 from eslib.exceptions import resolve_exception
 from elasticsearch.exceptions import TransportError
@@ -20,7 +19,7 @@ class ConfigurationError(Exception):
 
 class Context(object):
     # The settings that store boolean values
-    boolean_options = {'api': frozenset(['debug', 'kerberos', 'sniff']), 'logging': {}, 'kerberos': {}, 'ssl': frozenset(['verify_certs'])}
+    boolean_options = {'api': frozenset(['debug', 'kerberos', 'sniff']), 'logging': {}, 'kerberos': {}, 'ssl': frozenset(['verify_certs']), 'pycurl': {}}
 
     # mapping from command line options to configuration options:
     arg_options = {'debug': ['api', 'debug'],
@@ -48,7 +47,7 @@ class Context(object):
             'max_active': 10,
             'timeout': 10,
             'transport_class': AsyncTransport,
-            'connection_class': PyCyrlConnection,
+            'connection_class': None,
         },
         'logging': {
             'filters': 'header,data,text',
@@ -67,6 +66,10 @@ class Context(object):
             'key_file': None,
             'key_type': None,
             'key_password': None,
+        },
+        'pycurl': {
+            'libcurl_path': None,
+            'pycurl_path': None
         }
     }
 
@@ -132,11 +135,19 @@ class Context(object):
         if self.current_config['api']['username'] is None and self.current_config['api']['kerberos'] is None:
             raise ConfigurationError('not enough authentication informations')
 
+
+        self.check_pycurl(**self.current_config['pycurl'])
+
+        from eslib.pycurlconnection import CurlDebugType, PyCyrlConnection
+
         if self.current_config['logging']['filters'] is not None and self.current_config['api']['debug']:
             self.filter = 0
             filters = [x.strip() for x in self.current_config['logging']['filters'].split(',')]
             for f in filters:
                 self.filter |= CurlDebugType[f.upper()]
+
+        if self.current_config['api']['connection_class'] == None:
+            self.current_config['api']['connection_class'] = PyCyrlConnection
 
         connect_url = urllib.parse.urlparse(self.current_config['api']['url'])
         if connect_url[0] != 'https':
@@ -148,14 +159,29 @@ class Context(object):
             if self.current_config['ssl'].get('key_file', None) is not None and self.current_config['ssl'].get('key_type', None) is None:
                 self.current_config['ssl']['key_type'] = 'PEM'
 
+    def check_pycurl(self, libcurl_path=None, pycurl_path=None):
+        # Some distributions provides really old curl and pycurl
+        # So a custom definition can be provided
+        if libcurl_path is not None:
+            from ctypes import cdll
+            cdll.LoadLibrary(libcurl_path)
+
+        if pycurl_path is not None:
+            import importlib.util
+            import sys
+            pycurlspec = importlib.util.spec_from_file_location('pycurl', pycurl_path)
+            sys.modules[pycurlspec.name] = pycurlspec.loader.load_module()
+
     def connect(self, parent=None):
         if parent is not None:
             self.multi_handle = parent.multi_handle
             self.curl_perform_task = parent.curl_perform_task
             self.loop = parent.loop
         else:
+            from eslib.pycurlconnection import PyCyrlMultiHander
+
             self.loop = new_event_loop()
-            self.multi_handle = PyCyrlMuliHander(self.current_config['api']['max_active'], loop=self.loop)
+            self.multi_handle = PyCyrlMultiHander(self.current_config['api']['max_active'], loop=self.loop)
             self.curl_perform_task = None
 
         cnxprops={'multi_handle': self.multi_handle,
