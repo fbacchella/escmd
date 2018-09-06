@@ -54,3 +54,10 @@ class IndicesTestCase(tests.TestCaseProvider):
             self.assertIn('host', i)
             self.assertIn('node', i)
             self.assertIn('ip', i)
+
+    def test_cluster_health(self):
+        dispatcher = eslib.dispatchers['cluster']()
+        dispatcher.api = self.ctx
+        running = self._run_action(dispatcher, 'health')
+        self.assertIn('status', running.result)
+        self.assertIn('number_of_nodes', running.result)
