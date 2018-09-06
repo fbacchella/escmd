@@ -10,7 +10,7 @@ class TestESFailures(unittest.TestCase):
         transport_class = AsyncTransport
         connection_class = PyCyrlConnection
         try:
-            self.ctx = context.Context(url='http://169.254.169.253:9200', sniff=False, debug=False, transport_class=transport_class,
+            self.ctx = context.Context(url='http://203.0.113.1:9200', sniff=False, debug=False, transport_class=transport_class,
                                        timeout=1,
                                        connection_class=connection_class)
             self.ctx.connect()
@@ -25,7 +25,7 @@ class TestESFailures(unittest.TestCase):
         transport_class = AsyncTransport
         connection_class = PyCyrlConnection
         try:
-            self.ctx = context.Context(url='http://169.254.169.254:9200', sniff=False, debug=False,
+            self.ctx = context.Context(url='http://127.0.0.2:9200', sniff=False, debug=False,
                                        transport_class=transport_class,
                                        timeout=1,
                                        connection_class=connection_class)

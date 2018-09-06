@@ -79,3 +79,19 @@ class IndicesTestCase(tests.TestCaseProvider):
                 self.assertRegex(step2, '(\..*|[0-9]+) [a-zA_Z0-9_\.]+: 1')
         self.action_read_settings(dispatcher, ['-f', 'number_of_replicas'], tester)
 
+    def test_merge(self):
+        dispatcher = eslib.dispatchers['index']()
+        dispatcher.api = self.ctx
+        running = self._run_action(dispatcher, 'forcemerge', object_options={'name': id(self)})
+        self.assertEqual(1, len(running.object))
+        for i, data in running.object.items():
+            self.assertIsInstance(i, str)
+            self.assertIsInstance(data, dict)
+        for i in running.result:
+            index, data = i
+            self.assertIsInstance(data, dict)
+            self.assertEqual(len(data), 1)
+            shards = data['_shards']
+            self.assertIn('successful', shards)
+            self.assertIn('failed', shards)
+            self.assertIn('total', shards)
