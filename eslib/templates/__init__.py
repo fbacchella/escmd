@@ -38,14 +38,16 @@ class TemplatesPut(Verb):
 
     def fill_parser(self, parser):
         parser.add_option("-f", "--template_file", dest="template_file_name", default=None)
-        parser.add_option("-p", "--template_pattern", dest="template_pattern", default=None)
+        parser.add_option("-p", "--template_pattern", dest="template_pattern", default=[], action='append')
 
     @coroutine
     def check_verb_args(self, running, *args, template_file_name=None, template_pattern=None, **kwargs):
         with open(template_file_name, "r") as template_file:
             running.template = load(template_file, Loader=Loader)
-        if template_pattern is not None:
-            running.template['template'] = template_pattern
+        if template_pattern is not None and len(template_pattern) > 0:
+            running.template['index_patterns'] = template_pattern
+            if 'template' in running.template:
+                del running.template['template']
         yield from super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
@@ -82,6 +84,9 @@ class TemplatesDelete(RepeterVerb):
     def check_verb_args(self, running, ):
         if running.template_name == '*':
             raise Exception("won't destroy everything, -n/--name mandatory")
+
+    def format(self, running, name, result):
+        print(running, name, result)
 
 
 @command(TemplatesDispatcher)
