@@ -4,7 +4,7 @@ python:
   - "3.4"
   - "3.5"
   - "3.6"
-  - "pypy3"
+  - "3.7"
 
 addons:
   apt:
@@ -17,7 +17,7 @@ before_install:
   - java -version
 
 install:
-  - curl -L -o /tmp/es-snap.zip https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-6.1.2.zip
+  - curl -L -o /tmp/es-snap.zip https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-6.4.2.zip
   - unzip /tmp/es-snap.zip -d /tmp/
   - /tmp/elasticsearch-*/bin/elasticsearch -E path.repo=/tmp -E repositories.url.allowed_urls='http://*' -E node.attr.testattr=test -d
   - pip install .
