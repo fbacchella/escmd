@@ -331,7 +331,9 @@ class WriteSettings(RepeterVerb):
         running.values = values
         super().check_verb_args(running, **kwargs)
 
-    def _path_to_dict(self, path, value, current_dict = {}):
+    def _path_to_dict(self, path, value, current_dict = None):
+        if current_dict is None:
+            current_dict = {}
         current_key, next_path = next(WriteSettings.keydepth_re.finditer(path)).groups()
         if next_path is None:
             current_dict[current_key] = value
