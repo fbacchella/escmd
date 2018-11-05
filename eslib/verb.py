@@ -320,12 +320,14 @@ class WriteSettings(RepeterVerb):
         for i in args:
             try:
                 k, v = next(iter(WriteSettings.keyvalue_re.finditer(i))).groups()
+                if v == 'null':
+                    v = None
                 failed = False
+                self._dict_merge(values, self._path_to_dict(k, v))
             except StopIteration:
                 failed = True
         if failed:
             raise Exception('invalid key ' + i)
-        self._dict_merge(values, self._path_to_dict(k, v))
         running.values = values
         super().check_verb_args(running, **kwargs)
 

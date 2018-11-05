@@ -79,6 +79,31 @@ class IndicesTestCase(tests.TestCaseProvider):
                 self.assertRegex(step2, '(\..*|[0-9]+) [a-zA_Z0-9_\.]+: 1')
         self.action_read_settings(dispatcher, ['-f', 'number_of_replicas'], tester)
 
+    def test_write_settings(self):
+        dispatcher = eslib.dispatchers['index']()
+        dispatcher.api = self.ctx
+        running = self._run_action(dispatcher, 'writesettings', object_options={'name': id(self)},
+                                   object_args=['refresh_interval=5s', 'blocks.read_only_allow_delete=null', 'mapping.depth.limit=2'])
+        def tester(running, j):
+            self.assertIsInstance(j, tuple)
+            source, settings = j
+            self.assertIsNotNone(source)
+            self.assertIsInstance(settings, dict)
+            expected = "%s set" % id(self)
+            self.assertEqual(expected, running.cmd.to_str(running, j))
+        for j in running.result:
+            tester(running, j)
+
+        running = self._run_action(dispatcher, 'readsettings', object_options={'name': id(self)},
+                                   object_args=['refresh_interval', 'blocks.read_only_allow_delete', 'mapping.depth.limit'])
+        result = list(running.result)[0][1]
+        self.assertEqual(len(result), 2)
+        self.assertEqual(len(result['settings']), 2)
+        self.assertEqual(len(result['defaults']), 1)
+        self.assertEqual(result['settings']['refresh_interval'], '5s')
+        self.assertEqual(result['settings']['mapping.depth.limit'], '2')
+        self.assertEqual(result['defaults']['blocks.read_only_allow_delete'], 'false')
+
     def test_merge(self):
         dispatcher = eslib.dispatchers['index']()
         dispatcher.api = self.ctx
