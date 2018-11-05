@@ -350,7 +350,7 @@ update_all_types – Whether to update the mapping for all fields with the same 
 wait_for_active_shards – Set the number of active shards to wait for before the operation returns.
 """
 
-@command(IndiciesDispatcher, verb='create')
+@command(IndicesDispatcher, verb='create')
 class IndicesCreate(Verb):
 
     def fill_parser(self, parser):
