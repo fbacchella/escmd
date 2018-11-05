@@ -7,7 +7,7 @@ from json import dumps, load
 
 
 @dispatcher(object_name="index")
-class IndiciesDispatcher(Dispatcher):
+class IndicesDispatcher(Dispatcher):
 
     def fill_parser(self, parser):
         parser.add_option("-n", "--name", dest="name", help="index filter")
@@ -32,7 +32,7 @@ class IndiciesDispatcher(Dispatcher):
         return val
 
 
-@command(IndiciesDispatcher, verb='list')
+@command(IndicesDispatcher, verb='list')
 class IndiciesList(RepeterVerb):
 
     @coroutine
@@ -48,7 +48,7 @@ class IndiciesList(RepeterVerb):
             return "%s\t%12d\t%4d" % (i,j['primaries']['docs']['count'],j['total']['segments']['count'])
 
 
-@command(IndiciesDispatcher, verb='forcemerge')
+@command(IndicesDispatcher, verb='forcemerge')
 class IndiciesForceMerge(RepeterVerb):
 
     def fill_parser(self, parser):
@@ -71,7 +71,7 @@ class IndiciesForceMerge(RepeterVerb):
         return "%s merged" % name
 
 
-@command(IndiciesDispatcher, verb='delete')
+@command(IndicesDispatcher, verb='delete')
 class IndiciesDelete(RepeterVerb):
 
     @coroutine
@@ -88,7 +88,7 @@ class IndiciesDelete(RepeterVerb):
         return "%s deleted" % name
 
 
-@command(IndiciesDispatcher, verb='reindex')
+@command(IndicesDispatcher, verb='reindex')
 class IndiciesReindex(RepeterVerb):
 
     def fill_parser(self, parser):
@@ -193,12 +193,12 @@ class IndiciesReindex(RepeterVerb):
         return reindex_status
 
 
-@command(IndiciesDispatcher, verb='dump')
+@command(IndicesDispatcher, verb='dump')
 class IndiciesDump(DumpVerb):
     pass
 
 
-@command(IndiciesDispatcher, verb='readsettings')
+@command(IndicesDispatcher, verb='readsettings')
 class IndiciesReadSettings(ReadSettings):
 
     @coroutine
@@ -223,7 +223,7 @@ class IndiciesReadSettings(ReadSettings):
         return new_settings
 
 
-@command(IndiciesDispatcher, verb='writesettings')
+@command(IndicesDispatcher, verb='writesettings')
 class IndiciesWriteSettings(WriteSettings):
 
     @coroutine
@@ -247,7 +247,7 @@ class IndiciesWriteSettings(WriteSettings):
         return "%s set" % (name)
 
 
-@command(IndiciesDispatcher, verb='addmapping')
+@command(IndicesDispatcher, verb='addmapping')
 class IndiciesAddMapping(RepeterVerb):
 
     def fill_parser(self, parser):
@@ -270,7 +270,7 @@ class IndiciesAddMapping(RepeterVerb):
         return "%s -> %s" % (list(running.object.keys())[0], value.__str__())
 
 
-@command(IndiciesDispatcher, verb='getfields')
+@command(IndicesDispatcher, verb='getfields')
 class IndicesGetFieldMapping(RepeterVerb):
 
     def fill_parser(self, parser):
@@ -323,7 +323,7 @@ class IndicesGetFieldMapping(RepeterVerb):
                 yield prefix + separator + str(k) + ": " + v['type']
 
 
-@command(IndiciesDispatcher)
+@command(IndicesDispatcher)
 class IndiciesCat(CatVerb):
 
     def fill_parser(self, parser):
