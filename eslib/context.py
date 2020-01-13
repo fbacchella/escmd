@@ -110,7 +110,6 @@ class Context(object):
                     self.current_config[section][k] = config.getint(section, k)
                 else:
                     self.current_config[section][k] = v
-
         # extract values from explicit arguments or else from config file
         for arg_name, arg_destination in Context.arg_options.items():
             if arg_name in kwargs:
@@ -123,11 +122,17 @@ class Context(object):
 
         if explicit_user:
             self.current_config['api']['kerberos'] = False
+            if 'ssl' in self.current_config:
+                self.current_config['ssl']['cert_file'] = None
+                self.current_config['ssl']['key_file'] = None
         elif explicit_kerberos:
             self.current_config['api']['username'] = None
             self.current_config['api']['password'] = None
+            if 'ssl' in self.current_config:
+                self.current_config['ssl']['cert_file'] = None
+                self.current_config['ssl']['key_file'] = None
 
-        if self.current_config['api']['kerberos'] and self.current_config['kerberos'].get('keytab', None) is not None:
+        if self.current_config['api']['kerberos'] and self.current_config.get('kerberos', {}).get('keytab', None) is not None:
             import gssapi
             import os
 
@@ -139,13 +144,11 @@ class Context(object):
 
             gssapi.creds.Credentials(name=kname, usage='initiate', store={'ccache': ccache, 'client_keytab': keytab})
             os.environ['KRB5CCNAME'] = ccache
-            self.current_config['api']['kerberos'] = True
 
         if self.current_config['api']['url'] == None:
             raise ConfigurationError('incomplete configuration, Elastic url not found')
         if self.current_config['api']['username'] is None and self.current_config['api']['kerberos'] is None:
             raise ConfigurationError('not enough authentication informations')
-
 
         self.check_pycurl(**self.current_config['pycurl'])
 
