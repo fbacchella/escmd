@@ -26,14 +26,14 @@ class TaskTreeNode(TreeNode):
 
     def _value_to_str(self, level):
         node_name = self.value.get('node_name', '')
-        node_id = self.value.get('node', '')
         running_time_in_nanos = int(self.value.get('running_time_in_nanos', -1))
-        start_time_in_millis = int(self.value.get('start_time_in_millis', -1))
         action = self.value.get('action', '')
-        id = self.value.get('id', '')
         running_time = datetime.timedelta(seconds=int(running_time_in_nanos / 1e9))
-        start_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(round(start_time_in_millis / 1000, 0)))
-        return "%s:%-*s %-50s %s %s %s" % (node_id, 12-level*TreeNode.identation, id, action, node_name, running_time, start_time)
+        indentation = 35 - level*TreeNode.identation - len(action)
+        while indentation < 0:
+            indentation +=16
+        return "%s %-*s%s%-*s%s" % \
+               (action, indentation, '', node_name, 10-len(node_name), '', running_time)
 
 
 @command(TasksDispatcher, verb='tree')
