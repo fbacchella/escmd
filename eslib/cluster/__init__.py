@@ -2,6 +2,7 @@ from asyncio import coroutine
 
 from eslib.dispatcher import dispatcher, command, Dispatcher
 from eslib.verb import ReadSettings, WriteSettings, DumpVerb, CatVerb
+from elasticsearch.exceptions import RequestError
 
 import json
 
@@ -71,6 +72,71 @@ class ClusterHealth(DumpVerb):
             return json.dumps(list(item.keys()), **running.formatting)
         else:
             return json.dumps(item, **running.formatting)
+
+
+@command(ClusterDispatcher, verb='allocation_explain')
+class ClusterAllocationExplain(DumpVerb):
+
+    def fill_parser(self, parser):
+        super().fill_parser(parser)
+
+    @coroutine
+    def get(self, running):
+        return None
+
+    @coroutine
+    def check_verb_args(self, running, *args, **kwargs):
+        running.args = args
+        yield from super().check_verb_args(running, *args, **kwargs)
+
+    @coroutine
+    def execute(self, running):
+        try:
+            val = yield from self.api.escnx.cluster.allocation_explain()
+        except RequestError as e:
+            if e.error == 'illegal_argument_exception':
+                reason = e.info.get('error', {}).get('reason','')
+                if reason.startswith:
+                    return None
+                else:
+                    raise e
+            else:
+                raise e
+            val = None
+        return val
+
+    def to_str(self, running, item):
+        return json.dumps(item, **running.formatting)
+
+
+@command(ClusterDispatcher, verb='reroute')
+class ClusterReroute(DumpVerb):
+
+    def fill_parser(self, parser):
+        parser.add_option("-f", "--retry_failed", dest="retry_failed", default=False)
+        parser.add_option("--dry_run", dest="dry_run", default=False)
+        super().fill_parser(parser)
+
+    @coroutine
+    def get(self, running):
+        return None
+
+    @coroutine
+    def check_verb_args(self, running, *args, **kwargs):
+        if kwargs.get('retry_failed', None) is not None:
+            running.retry_failed = kwargs['retry_failed']
+        if kwargs.get('dry_run', None) is not None:
+            running.dry_run = kwargs['dry_run']
+        running.args = args
+        yield from super().check_verb_args(running, *args, **kwargs)
+
+    @coroutine
+    def execute(self, running):
+        val = yield from self.api.escnx.cluster.reroute(retry_failed=running.retry_failed, dry_run=running.dry_run)
+        return val
+
+    def to_str(self, running, item):
+        return json.dumps(item, **running.formatting)
 
 
 @command(ClusterDispatcher, verb='readsettings')
