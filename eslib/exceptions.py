@@ -67,6 +67,10 @@ class ESLibTimeoutError(ESLibConnectionError):
 class ESLibAuthorizationException(ESLibError):
 
     def __init__(self, e, *args, **kwargs):
+        #print(e.info)
+        #print(e.error)
+        #print(e.status_code)
+        #print(e.info['error']['reason'])
         super().__init__(e.info['error']['reason'], *args, exception=e, value=e.info['error'], **kwargs)
 
 
@@ -78,7 +82,16 @@ class ESLibBatchError(ESLibError):
 
 
 class ESLibRequestError(ESLibError):
+
     def __init__(self, e, *args, **kwargs):
+        print(type(e))
+        #print(e.info.keys(), e.info)
+        print(type(e.error), e.error)
+        print(e.status_code)
+        #error_info = e.info.pop('error', {})
+        #resource_id = error_info.pop('resource.id', None)
+        #_id = e.info.pop('_id', None)
+        #_index = e.info.pop('_index', None)
         super().__init__(e.info['error']['reason'], *args, exception=e, value=e.info['error'], **kwargs)
 
 
@@ -123,8 +136,14 @@ def _get_notfound_error(ex):
 
 def _get_transport_error(e):
     if e.status_code == 502:
+        print(e.status_code)
+        print(e.error)
+        print(e.info)
         return ESLibProxyError(e)
     else:
+        print(e.status_code)
+        print(e.error)
+        print(e.info)
         return e
 
 ex_mapping = {
@@ -138,7 +157,7 @@ ex_mapping = {
 }
 
 def resolve_exception(ex):
-    if isinstance(ex, elasticsearch.exceptions.TransportError) and 'failures' in ex.info:
+    if isinstance(ex, elasticsearch.exceptions.TransportError) and ex.info is not None and 'failures' in ex.info:
         return ESLibBatchError(ex)
     if type(ex) in ex_mapping:
         return ex_mapping[type(ex)](ex)
