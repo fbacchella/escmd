@@ -29,7 +29,7 @@ def set_version_info():
     version_info = lambda x: False
     version_info_vector = list(pycurl.version_info())
     version_info_vector.reverse()
-    versions = set(['libz_version', 'libidn', 'version'])
+    versions = set(['libz_version', 'libidn', 'version', 'ares'])
     for i in ('age', 'version', 'version_num', 'host', 'features', 'ssl_version', 'ssl_version_num', 'libz_version', 'protocols',
               'ares', 'ares_num',
               'libidn',
@@ -53,12 +53,13 @@ def set_version_info():
                         'VERSION_NTLM_WB': 'NTLM_WB',
                         'VERSION_SSL': 'SSL',
                         'VERSION_LIBZ': 'libz',
-                        'VERSION_UNIX_SOCKETS': 'unix-sockets',
+                        'VERSION_UNIX_SOCKETS': 'UnixSockets',
                         'VERSION_KERBEROS5': 'Kerberos',
                         'VERSION_SPNEGO': 'SPNEGO',
                         'VERSION_HTTP2': 'HTTP2',
                         'VERSION_GSSAPI': 'GSS-API',
-                        'VERSION_TLSAUTH_SRP': 'TLS-SRP'}
+                        'VERSION_TLSAUTH_SRP': 'TLS-SRP',
+                        'VERSION_PSL': 'PSL'}
     for i in ('VERSION_IPV6', 'VERSION_KERBEROS4', 'VERSION_KERBEROS5', 'VERSION_SSL', 'VERSION_LIBZ', 'VERSION_NTLM',
               'VERSION_GSSNEGOTIATE', 'VERSION_DEBUG', 'VERSION_CURLDEBUG', 'VERSION_ASYNCHDNS', 'VERSION_SPNEGO',
               'VERSION_LARGEFILE',
