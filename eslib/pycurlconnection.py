@@ -1,5 +1,5 @@
 from elasticsearch import Connection, ConnectionError, TransportError
-from elasticsearch.exceptions import HTTP_EXCEPTIONS, ConnectionTimeout
+from elasticsearch.exceptions import HTTP_EXCEPTIONS, ConnectionTimeout, ConnectionError
 import pycurl
 from io import BytesIO
 from elasticsearch.compat import urlencode
@@ -11,6 +11,7 @@ from logging import Logger
 from asyncio import Queue, QueueEmpty, get_event_loop, wait_for, TimeoutError, wait
 import json
 import logging
+from eslib.exceptions import PyCurlException
 
 logger = logging.getLogger('eslib.pycurlconnection')
 
@@ -72,6 +73,11 @@ def set_version_info():
 
 
 version_info = set_version_info()
+
+errors = {}
+for (k, v) in pycurl.__dict__.items():
+    if k.startswith('E_'):
+        errors[v] = k[2:]
 
 
 def get_header_function(headers):
@@ -334,7 +340,7 @@ class PyCyrlMultiHander(object):
                     if code == 28:
                         ex = ConnectionTimeout(code, message, handle.getinfo(pycurl.EFFECTIVE_URL), handle.getinfo(pycurl.TOTAL_TIME))
                     else:
-                        ex = ConnectionError(code, message, handle.getinfo(pycurl.EFFECTIVE_URL))
+                        ex = PyCurlException(code, errors[code], handle.getinfo(pycurl.EFFECTIVE_URL))
                     handle.f_cb(ex)
 
 
@@ -454,6 +460,8 @@ class PyCyrlConnection(Connection):
                 pycurl.HTTPAUTH: pycurl.HTTPAUTH_NEGOTIATE,
                 pycurl.USERPWD: ':'
             })
+        elif self.kerberos:
+            raise Exception('Kerberos required, but not supported')
         elif self.http_auth is not None:
             settings[pycurl.USERPWD] = self.http_auth
 

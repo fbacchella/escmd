@@ -1,5 +1,14 @@
 import elasticsearch.exceptions
 
+class PyCurlException(elasticsearch.exceptions.ConnectionError):
+
+    def __str__(self):
+        return "curl error %s on URL %s" % (
+            self.error,
+            self.info,
+        )
+
+
 class ESLibError(Exception):
     def __init__(self, error_message, value={}, exception=None):
         self.value = value
@@ -128,6 +137,11 @@ class ESLibConflictError(ESLibError):
             message += "first one:\n%s\n" % failures[0]
         message += "%s\n" % e.info
         super().__init__(message, *args, exception=e, **kwargs)
+
+
+class ESLibPyCurlError(ESLibError):
+    def __init__(self, e, *args, **kwargs):
+        super().__init__(str(e), *args, exception=e, **kwargs)
 
 
 def _get_notfound_error(ex):
