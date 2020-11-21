@@ -127,7 +127,7 @@ def get_header_function(headers):
 content_type_re = re.compile("(?P<content_type>.*?); (?:charset=(?P<charset>.*))")
 
 
-def return_error(status_code, raw_data, content_type='application/json', http_message=None, url=None):
+def return_error(status_code, raw_data, content_type=None, http_message=None, url=None):
     """ Locate appropriate exception and raise it. """
 
     error_message = raw_data
@@ -145,6 +145,9 @@ def return_error(status_code, raw_data, content_type='application/json', http_me
     elif http_message is not None:
         additional_info = {'elasticerror': False}
         error_message = http_message
+    else:
+        additional_info = {'elasticerror': False}
+        error_message = raw_data
     return HTTP_EXCEPTIONS.get(status_code, TransportError)(status_code, error_message, additional_info, url)
 
 
