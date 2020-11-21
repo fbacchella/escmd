@@ -74,6 +74,13 @@ class ESLibAuthorizationException(ESLibError):
         super().__init__(e.info['error']['reason'], *args, exception=e, value=e.info['error'], **kwargs)
 
 
+class ESLibAuthenticationException(ESLibError):
+
+    def __init__(self, e, *args, **kwargs):
+        url = e.args[3].split('?', 1)[0]
+        super().__init__(e.error + " " + url, *args, exception=e, **kwargs)
+
+
 class ESLibBatchError(ESLibError):
 
     def __init__(self, e, *args, **kwargs):
@@ -152,6 +159,7 @@ ex_mapping = {
         elasticsearch.exceptions.NotFoundError: lambda e: _get_notfound_error(e),
         elasticsearch.exceptions.TransportError: lambda e: _get_transport_error(e),
         elasticsearch.exceptions.AuthorizationException: lambda e: ESLibAuthorizationException(e),
+        elasticsearch.exceptions.AuthenticationException: lambda e: ESLibAuthenticationException(e),
         elasticsearch.exceptions.ConnectionTimeout: lambda e: ESLibTimeoutError(e),
         elasticsearch.exceptions.ConnectionError: lambda e: ESLibConnectionError(e),
 }
