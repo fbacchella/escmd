@@ -60,7 +60,7 @@ class TemplatesPut(Verb):
         return val
 
     def to_str(self, running, value):
-        return value.__str__()
+        return "%s added" % running.template_name
 
 """
 delete_template(*args, **kwargs)
@@ -86,7 +86,7 @@ class TemplatesDelete(RepeterVerb):
             raise Exception("won't destroy everything, -n/--name mandatory")
 
     def format(self, running, name, result):
-        print(running, name, result)
+        return "%s deleted" % name
 
 
 @command(TemplatesDispatcher)
