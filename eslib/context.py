@@ -150,18 +150,21 @@ class Context(object):
         if self.current_config['api']['username'] is None and self.current_config['api']['kerberos'] is None:
             raise ConfigurationError('not enough authentication informations')
 
-        self.check_pycurl(**self.current_config['pycurl'])
-
-        from eslib.pycurlconnection import CurlDebugType, PyCyrlConnection
-
-        if self.current_config['logging']['filters'] is not None and self.current_config['api']['debug']:
-            self.filter = 0
-            filters = [x.strip() for x in self.current_config['logging']['filters'].split(',')]
-            for f in filters:
-                self.filter |= CurlDebugType[f.upper()]
-
         if self.current_config['api']['connection_class'] == None:
-            self.current_config['api']['connection_class'] = PyCyrlConnection
+            self.check_pycurl(**self.current_config['pycurl'])
+
+            from eslib.pycurlconnection import CurlDebugType, PyCurlConnection, http_versions, version_info
+            self.current_config['api']['connection_class'] = PyCurlConnection
+
+        if self.current_config['api']['connection_class'] == PyCurlConnection:
+            if self.current_config['logging']['filters'] is not None and self.current_config['api']['debug']:
+                self.filter = 0
+                filters = [x.strip() for x in self.current_config['logging']['filters'].split(',')]
+                for f in filters:
+                    self.filter |= CurlDebugType[f.upper()]
+
+            if self.current_config['api']['kerberos'] and 'SPNEGO' not in version_info.features:
+                raise ConfigurationError('Kerberos authentication requested, but SPNEGO is not available')
 
         connect_url = urllib.parse.urlparse(self.current_config['api']['url'])
         if connect_url[0] != 'https':
@@ -192,10 +195,10 @@ class Context(object):
             self.curl_perform_task = parent.curl_perform_task
             self.loop = parent.loop
         else:
-            from eslib.pycurlconnection import PyCyrlMultiHander
+            from eslib.pycurlconnection import PyCurlMultiHander
 
             self.loop = new_event_loop()
-            self.multi_handle = PyCyrlMultiHander(self.current_config['api']['max_active'], loop=self.loop)
+            self.multi_handle = PyCurlMultiHander(self.current_config['api']['max_active'], loop=self.loop)
             self.curl_perform_task = None
 
         cnxprops={'multi_handle': self.multi_handle,

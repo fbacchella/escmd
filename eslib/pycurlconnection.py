@@ -1,4 +1,4 @@
-from elasticsearch import Connection, ConnectionError, TransportError
+from elasticsearch import Connection, TransportError
 from elasticsearch.exceptions import HTTP_EXCEPTIONS, ConnectionTimeout, ConnectionError
 import pycurl
 from io import BytesIO
@@ -226,7 +226,7 @@ def get_curl_debug(debug_filter, logger):
     return _curl_debug
 
 
-class PyCyrlMultiHander(object):
+class PyCurlMultiHander(object):
 
     def __init__(self, max_query=10, loop=get_event_loop()):
         self.loop = loop
@@ -345,7 +345,7 @@ class PyCyrlMultiHander(object):
                     handle.f_cb(ex)
 
 
-class PyCyrlConnection(Connection):
+class PyCurlConnection(Connection):
     """
      Default connection class using the `urllib3` library and the http protocol.
 
@@ -387,7 +387,7 @@ class PyCyrlConnection(Connection):
                  use_ssl=False, verify_certs=False, ssl_opts={},
                  debug=False, debug_filter=CurlDebugType.HEADER + CurlDebugType.DATA, logger=sys.stderr,
                  **kwargs):
-        super(PyCyrlConnection, self).__init__(use_ssl=use_ssl, timeout=timeout, **kwargs)
+        super(PyCurlConnection, self).__init__(use_ssl=use_ssl, timeout=timeout, **kwargs)
 
         self.multi_handle = multi_handle
         self.timeout = timeout
@@ -397,8 +397,8 @@ class PyCyrlConnection(Connection):
         if use_ssl:
             self.use_ssl = True
             for k, v in ssl_opts.items():
-                if k in PyCyrlConnection.ssl_opts_mapping and v is not None:
-                    self.ssl_opts[PyCyrlConnection.ssl_opts_mapping[k]] = v
+                if k in PyCurlConnection.ssl_opts_mapping and v is not None:
+                    self.ssl_opts[PyCurlConnection.ssl_opts_mapping[k]] = v
         else:
             self.use_ssl = False
         self.kerberos = kerberos
@@ -461,8 +461,6 @@ class PyCyrlConnection(Connection):
                 pycurl.HTTPAUTH: pycurl.HTTPAUTH_NEGOTIATE,
                 pycurl.USERPWD: ':'
             })
-        elif self.kerberos:
-            raise Exception('Kerberos required, but not supported')
         elif self.http_auth is not None:
             settings[pycurl.USERPWD] = self.http_auth
 
