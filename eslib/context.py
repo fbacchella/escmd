@@ -50,6 +50,7 @@ class Context(object):
             'timeout': 10,
             'transport_class': AsyncTransport,
             'connection_class': None,
+            'http_version': None,
         },
         'logging': {
             'filters': 'header,data,text',
@@ -163,6 +164,9 @@ class Context(object):
                 for f in filters:
                     self.filter |= CurlDebugType[f.upper()]
 
+            if self.current_config['api']['http_version'] is not None and self.current_config['api']['http_version'] not in http_versions:
+                raise ConfigurationError('Unknown http version')
+
             if self.current_config['api']['kerberos'] and 'SPNEGO' not in version_info.features:
                 raise ConfigurationError('Kerberos authentication requested, but SPNEGO is not available')
 
@@ -223,6 +227,11 @@ class Context(object):
         if self.current_config['api']['user_agent'] is not None:
             cnxprops.update({
                 'user_agent': self.current_config['api']['user_agent'],
+            })
+
+        if self.current_config['api']['http_version'] is not None:
+            cnxprops.update({
+                'http_version': self.current_config['api']['http_version'],
             })
 
         if self.current_config['api']['username'] is not None and self.current_config['api']['password'] is not None:

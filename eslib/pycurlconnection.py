@@ -345,6 +345,14 @@ class PyCurlMultiHander(object):
                     handle.f_cb(ex)
 
 
+http_versions = {
+    '0.9': None,
+    '1.0': pycurl.CURL_HTTP_VERSION_1_0,
+    '1.1': pycurl.CURL_HTTP_VERSION_1_1,
+    '2':   pycurl.CURL_HTTP_VERSION_2,
+}
+
+
 class PyCurlConnection(Connection):
     """
      Default connection class using the `urllib3` library and the http protocol.
@@ -383,7 +391,7 @@ class PyCurlConnection(Connection):
 
     def __init__(self,
                  multi_handle=None,
-                 http_auth=None, kerberos=False, user_agent="pycurl/eslib", timeout=10,
+                 http_auth=None, kerberos=False, user_agent="pycurl/eslib", timeout=10, http_version=None,
                  use_ssl=False, verify_certs=False, ssl_opts={},
                  debug=False, debug_filter=CurlDebugType.HEADER + CurlDebugType.DATA, logger=sys.stderr,
                  **kwargs):
@@ -412,6 +420,10 @@ class PyCurlConnection(Connection):
             self.debug_filter = get_curl_debug(debug_filter, logger)
         else:
             self.debug = False
+        if http_version is not None and http_version in http_versions:
+            self.http_version = http_versions[http_version]
+        else:
+            self.http_version = None
 
     def _get_curl_handler(self, headers):
         handle = pycurl.Curl()
@@ -438,6 +450,9 @@ class PyCurlConnection(Connection):
             pycurl.UNRESTRICTED_AUTH: True,
             pycurl.POSTREDIR: pycurl.REDIR_POST_ALL,
         }
+
+        if self.http_version is not None:
+            settings[pycurl.HTTP_VERSION] = self.http_version
 
         if self.use_ssl:
             # Strict TLS check
