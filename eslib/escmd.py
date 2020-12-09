@@ -26,7 +26,7 @@ def filter_result(cmd, running, result):
         # If execute return a generator, iterate other it
         for s in result:
             if isinstance(s, ESLibError):
-                print(s)
+                print(s, file=sys.stderr)
             elif isinstance(s, Exception):
                 if hasattr(s, 'source'):
                     print('Exception from source "%s":' % s.source, file=sys.stderr)
@@ -60,7 +60,6 @@ class UpdateDict(dict):
 
 
 def main():
-
     default_config = None
     if 'ESCONFIG' in os.environ:
         default_config = os.environ['ESCONFIG']
@@ -75,7 +74,7 @@ def main():
     parser.add_option("-u", "--user", "--username", dest="username", help="User to authenticate")
     parser.add_option("-k", "--kerberos", dest="kerberos", help="Uses kerberos authentication", action='store_true')
     parser.add_option("-U", "--url", dest="url", help="URL to connect to", default=None)
-    parser.add_option("-t", "--timeout", dest="timeout", help="Connection timeout", default=10, type=int)
+    parser.add_option("-t", "--timeout", dest="timeout", help="Connection timeout", default=None, type=int)
 
     (options, args) = parser.parse_args()
 
