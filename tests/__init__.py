@@ -1,13 +1,13 @@
 import unittest
 from eslib import context
-from eslib.pycurlconnection import PyCyrlConnection
+from eslib.pycurlconnection import PyCurlConnection
 from eslib.asynctransport import AsyncTransport
 
 class TestCaseProvider(unittest.TestCase):
 
     def setUp(self):
         transport_class=AsyncTransport
-        connection_class=PyCyrlConnection
+        connection_class=PyCurlConnection
         self.ctx = context.Context(url='localhost:9200', sniff=False, debug=False, transport_class=transport_class, connection_class=connection_class)
         self.ctx.connect()
         for i in self.ctx.perform_query(self.ctx.escnx.indices.create(id(self))):
