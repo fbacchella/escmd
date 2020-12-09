@@ -18,7 +18,7 @@ before_install:
 install:
   - curl -L -o /tmp/es-snap.zip https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-6.4.2.zip
   - unzip /tmp/es-snap.zip -d /tmp/
-  - /tmp/elasticsearch-*/bin/elasticsearch -E path.repo=/tmp -E repositories.url.allowed_urls='http://*' -E node.attr.testattr=test -d
+  - /tmp/elasticsearch-*/bin/elasticsearch -E path.repo=/tmp -E repositories.url.allowed_urls='http://*' -E node.attr.testattr=test -E "discovery.type=single-node" -E "cluster.routing.allocation.disk.watermark.low=90%" -d
   - pip install .
   - |
     while true ; do
