@@ -338,10 +338,10 @@ class PyCurlMultiHander(object):
                 for handle, code, message in failed:
                     self.handles.remove(handle)
                     self.multi.remove_handle(handle)
-                    if code == 28:
+                    if code == pycurl.E_OPERATION_TIMEDOUT:
                         ex = ConnectionTimeout(code, message, handle.getinfo(pycurl.EFFECTIVE_URL), handle.getinfo(pycurl.TOTAL_TIME))
                     else:
-                        ex = PyCurlException(code, errors[code], handle.getinfo(pycurl.EFFECTIVE_URL))
+                        ex = PyCurlException(code, handle.errstr(), handle.getinfo(pycurl.EFFECTIVE_URL))
                     handle.f_cb(ex)
 
 

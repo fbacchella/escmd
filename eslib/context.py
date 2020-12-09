@@ -271,10 +271,11 @@ class Context(object):
         # done contain either a result/exception from run_phrase or an exception from multi_handle.perform()
         # In both case, the first result is sufficient
         for i in done:
-            try:
+            ex = i.exception()
+            if ex is not None:
+                raise resolve_exception(ex)
+            else:
                 running = i.result()
-            except TransportError as e:
-                raise resolve_exception(e)
             # If running is None, run_phrase excited with sys.exit, because of argparse
             if running is not None:
                 return running
