@@ -170,7 +170,7 @@ class DumpVerb(RepeterVerb):
 
 class List(RepeterVerb):
     verb = "list"
-    template = "{name!s} {id!s}"
+    template = "{name!s}"
 
     @coroutine
     def check_verb_args(self, running, *args, template=None, **kwargs):
@@ -179,6 +179,7 @@ class List(RepeterVerb):
 
     def fill_parser(self, parser):
         super(List, self).fill_parser(parser)
+        parser.add_option("-t", "--template", dest="template", default=None)
 
     def execute(self, running):
         val = yield from self.get_elements(running)
@@ -190,7 +191,13 @@ class List(RepeterVerb):
     def to_str(self, running, item):
         name = item[0]
         value = item[1]
-        return "%s %s" % (name, list(value.keys()))
+        template = running.template
+        if template is None:
+            template = self.template
+        if isinstance(template, str):
+            return template.format(name=name, **value)
+        else:
+            return str(template(name, value))
 
 class CatVerb(List):
     verb = "cat"
