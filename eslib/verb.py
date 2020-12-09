@@ -199,19 +199,23 @@ class List(RepeterVerb):
         else:
             return str(template(name, value))
 
+
 class CatVerb(List):
     verb = "cat"
 
     def fill_parser(self, parser):
         parser.add_option("-H", "--headers", dest="headers", default='*')
         parser.add_option("-f", "--format", dest="format", default='text')
+        parser.add_option("-b", dest="bytes_format", default=False, action='store_true')
         parser.add_option("-p", "--pretty", dest="pretty", default=False, action='store_true')
 
     @coroutine
-    def check_verb_args(self, running, *args, headers='*', format='text', pretty=False, **kwargs):
+    def check_verb_args(self, running, *args, headers='*', format='text', pretty=False, bytes_format=False, **kwargs):
         running.h = headers
         running.format = format
         running.pretty = pretty
+        if bytes_format:
+            running.bytes = 'b'
         if pretty:
             running.formatting = {'indent': 2, 'sort_keys': True}
         else:
@@ -224,7 +228,7 @@ class CatVerb(List):
     @coroutine
     def get(self, running, **kwargs):
         catargs = {}
-        for a in ('format', 'h', 'local', 'nodes'):
+        for a in ('format', 'h', 'local', 'nodes', 'bytes'):
             if hasattr(running, a):
                 catargs[a] = getattr(running, a)
         val = yield from self.get_source()(**catargs)
