@@ -40,20 +40,37 @@ class ClusterMaster(CatVerb):
 @command(ClusterDispatcher, verb='health')
 class ClusterHealth(DumpVerb):
 
+    def fill_parser(self, parser):
+        parser.add_option("-w", "--wait_for", dest="wait_for", default=None)
+        super().fill_parser(parser)
+
     @coroutine
     def get(self, running):
         return None
 
     @coroutine
     def check_verb_args(self, running, *args, **kwargs):
+        if kwargs.get('wait_for', None) is not None:
+            waited_parts = kwargs['wait_for'].split(':')
+            if len(waited_parts) == 2:
+                (waited_type, waited_value) = waited_parts
+                running.waited_type = waited_type
+                running.waited_value = waited_value
+            elif len(waited_parts) == 1:
+                running.waited_type = 'status'
+                running.waited_value = waited_parts[0]
+
+        else:
+            running.waited_type = None
         running.args = args
-        if len(args) > 0:
-            flat = True
         yield from super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
     def execute(self, running):
-        val = yield from self.api.escnx.cluster.health(level='cluster')
+        waited = {}
+        if running.waited_type is not None:
+            waited['wait_for_' + running.waited_type] = running.waited_value
+        val = yield from self.api.escnx.cluster.health(level='cluster', **waited)
         return val
 
     def to_str(self, running, item):
@@ -78,6 +95,7 @@ class ClusterHealth(DumpVerb):
 class ClusterAllocationExplain(DumpVerb):
 
     def fill_parser(self, parser):
+        parser.add_option("-w", "--wait_for", dest="wait_for", default=None)
         super().fill_parser(parser)
 
     @coroutine
