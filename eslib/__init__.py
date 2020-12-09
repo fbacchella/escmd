@@ -49,4 +49,7 @@ import eslib.nodes
 import eslib.templates
 import eslib.tasks
 import eslib.cluster
+import eslib.documents
 import eslib.shards
+import eslib.plugins
+import eslib.xpack
