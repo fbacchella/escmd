@@ -1,9 +1,15 @@
-from eslib.verb import Verb, DumpVerb, RepeterVerb, ReadSettings, WriteSettings, CatVerb
+from eslib.verb import Verb, DumpVerb, RepeterVerb, ReadSettings, WriteSettings, CatVerb, List
 from eslib.dispatcher import dispatcher, command, Dispatcher
 from eslib.exceptions import ESLibError
 from asyncio import coroutine
+from json import loads, dumps
+from elasticsearch.exceptions import NotFoundError, ElasticsearchException
 import re
-from json import dumps, load
+from yaml import load
+try:
+    from yaml import CLoader as Loader, CDumper as Dumper
+except ImportError:
+    from yaml import Loader, Dumper
 
 
 @dispatcher(object_name="index")
@@ -33,19 +39,17 @@ class IndicesDispatcher(Dispatcher):
 
 
 @command(IndicesDispatcher, verb='list')
-class IndiciesList(RepeterVerb):
+class IndiciesList(List):
+
+    template = lambda self, x, y: "%s\t%12d\t%4d\t%12d" % (x, y['indices'][x]['primaries']['docs']['count'], y['indices'][x]['primaries']['segments']['count'], y['indices'][x]['primaries']['store']['size_in_bytes'])
 
     @coroutine
-    def action(self, element, running):
-        val = yield from self.api.escnx.indices.stats(index=element[0])
-        return val
-
-    def result_is_valid(self, result):
-        return result.get('indices', None) is not None
-
-    def format(self, running, name, result):
-        for i, j in result['indices'].items():
-            return "%s\t%12d\t%4d" % (i,j['primaries']['docs']['count'],j['total']['segments']['count'])
+    def get_elements(self, running):
+        vals = []
+        for i in running.object.keys():
+            stats = yield from self.api.escnx.indices.stats(index=i)
+            vals.append((i, stats))
+        return vals
 
 
 @command(IndicesDispatcher, verb='forcemerge')
@@ -53,22 +57,44 @@ class IndiciesForceMerge(RepeterVerb):
 
     def fill_parser(self, parser):
         parser.add_option("-m", "--max_num_segments", dest="max_num_segments", help="Max num segmens", default=1)
+        parser.add_option("-t", "--notranslog", dest="notranslog", help="Remove translog", default=False, action='store_true')
+        parser.add_option("-c", "--codec", dest="codec", default=None)
 
     @coroutine
-    def check_verb_args(self, running, *args, max_num_segments=1, **kwargs):
+    def check_verb_args(self, running, *args, max_num_segments=1, notranslog=False, codec=None, **kwargs):
         running.max_num_segments = max_num_segments
+        running.notranslog = notranslog
+        if codec == 'best_compression' or codec == 'default':
+            running.codec = codec
+        elif codec is not None:
+            return False
+        else:
+            running.codec = None
+
         yield from super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
-    def action(self, element, running):
-        val = yield from self.api.escnx.indices.forcemerge(element[0], max_num_segments=running.max_num_segments, flush=True)
+    def execute(self, running):
+        if running.notranslog:
+            yield from self.api.escnx.indices.put_settings(index=running.index_name,
+                                                           body={'index': {'translog': {'flush_threshold_size': '56b'}}})
+        if running.codec is not None:
+            yield from self.api.escnx.indices.close(index=running.index_name)
+            yield from self.api.escnx.indices.put_settings(index=running.index_name,
+                                                           body={'index': {'codec': running.codec}})
+            yield from self.api.escnx.indices.open(index=running.index_name, wait_for_active_shards='all')
+
+        val = yield from self.api.escnx.indices.forcemerge(running.index_name, max_num_segments=running.max_num_segments, flush=True)
         return val
 
     def result_is_valid(self, result):
         return result.get('_shards',{}).get('failed', -1) == 0
 
-    def format(self, running, name, result):
-        return "%s merged" % name
+    def to_str(self, running, value):
+        merged = "successful: %d, failed: %d\nmerged:\n" % (value['_shards']['successful'], value['_shards']['failed'])
+        for i in running.object.keys():
+            merged += "  %s\n" % i
+        return merged
 
 
 @command(IndicesDispatcher, verb='delete')
@@ -375,5 +401,39 @@ class IndicesCreate(Verb):
         status = value.get('acknowledged', False)
         if status and name is not None:
             return '%s created' % name
+        else:
+            return dumps(value)
+
+
+@command(IndicesDispatcher, verb='stats')
+class IndicesStats(DumpVerb):
+
+    def fill_parser(self, parser):
+        super().fill_parser(parser)
+        parser.add_option("-m", "--metrics", dest="metrics", help="Metrics list[]", default=None, action='append')
+        parser.add_option("-f", "--flat", dest="flat", help="Flatten stats", default=False, action='store_true')
+
+    @coroutine
+    def check_verb_args(self, running, *args, metrics=None, flat=False, **kwargs):
+        if metrics is not None:
+            running.metrics = ','.join(metrics)
+        else:
+            running.metrics = None
+        running.flat = flat
+        yield from super().check_verb_args(running, *args, **kwargs)
+
+    @coroutine
+    def get(self, running):
+        return None
+
+    @coroutine
+    def execute(self, running):
+        val = yield from self.api.escnx.indices.stats(running.index_name, metric=running.metrics)
+        return val
+
+    def to_str(self, running, value):
+        if running.flat:
+            pass
+            #value = {k.replace('index.', ''): v for k, v in index_data['defaults'].items()}
         else:
             return dumps(value)
