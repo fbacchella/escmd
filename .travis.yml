@@ -1,14 +1,12 @@
 language: python
 
 python:
-  - "3.4"
-  - "3.5"
   - "3.6"
 
 addons:
   apt:
     packages:
-      - oracle-java8-installer
+      - openjdk-11-jdk
 
 before_install:
   - sudo update-java-alternatives -s java-8-oracle
@@ -16,7 +14,7 @@ before_install:
   - java -version
 
 install:
-  - curl -L -o /tmp/es-snap.zip https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-6.4.2.zip
+  - curl -L -o /tmp/es-snap.zip https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-6.8.13.zip
   - unzip /tmp/es-snap.zip -d /tmp/
   - /tmp/elasticsearch-*/bin/elasticsearch -E path.repo=/tmp -E repositories.url.allowed_urls='http://*' -E node.attr.testattr=test -E "discovery.type=single-node" -E "cluster.routing.allocation.disk.watermark.low=90%" -d
   - pip install .
