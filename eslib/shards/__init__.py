@@ -52,7 +52,9 @@ class ShardTreeNode(TreeNode):
             for (k, v) in self.value.items():
                 if k == 'allocation':
                     if v == 'primary':
-                        allocation = 'p'
+                        allocation = '*'
+                    elif v == 'unused':
+                        allocation = '-'
                     else:
                         allocation = ' '
                 elif k == 'version':
