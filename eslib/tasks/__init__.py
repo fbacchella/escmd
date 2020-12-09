@@ -80,6 +80,8 @@ class TasksTree(Verb):
                     nodes[node] = node_tree
                 elif parent is not None:
                     next_try_parent[node] = parent
+            if len(try_parent) == len(next_try_parent):
+                break
             try_parent = next_try_parent
         return tree
 
