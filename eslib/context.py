@@ -157,7 +157,7 @@ class Context(object):
             from eslib.pycurlconnection import CurlDebugType, PyCurlConnection, http_versions, version_info
             self.current_config['api']['connection_class'] = PyCurlConnection
 
-        if str(self.current_config['api']['connection_class']) == 'PyCurlConnection':
+        if str(self.current_config['api']['connection_class'].__name__) == 'PyCurlConnection':
             if self.current_config['logging']['filters'] is not None and self.current_config['api']['debug']:
                 self.filter = 0
                 filters = [x.strip() for x in self.current_config['logging']['filters'].split(',')]
