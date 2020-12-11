@@ -117,16 +117,27 @@ class IndiciesReindex(RepeterVerb):
     def fill_parser(self, parser):
         parser.add_option("-t", "--use_template", dest="template_name", help="Template to use for reindexing", default=None)
         parser.add_option("-p", "--prefix", dest="prefix", default='')
+        parser.add_option("-k", "--keepmapping", dest="keep_mapping", default=False, action='store_true')
         parser.add_option("-s", "--suffix", dest="suffix", default='')
         parser.add_option("-i", "--infix_regex", dest="infix_regex", default=None)
+        parser.add_option("-c", "--codec", dest="codec", default=None)
 
     @coroutine
-    def check_verb_args(self, running, *args, template_name=None, infix_regex=None, prefix='', suffix='', keep_mapping=False, **kwargs):
+    def check_verb_args(self, running, *args, template_name=None, infix_regex=None, prefix='', suffix='', keep_mapping=False,
+                        codec=None,
+                        **kwargs):
         running.settings = {}
         running.mappings = None
         running.old_replica = None
+        if codec == 'best_compression' or codec == 'default':
+            running.codec = codec
+        elif codec is not None:
+            return False
+        else:
+            running.codec = None
         if template_name is not None:
             templates = yield from self.api.escnx.indices.get_template(name=template_name)
+            running.keep_mapping = False
             if template_name in templates:
                 template = templates[template_name]
                 settings = template['settings']
@@ -136,6 +147,10 @@ class IndiciesReindex(RepeterVerb):
                 running.mappings = mappings
                 running.old_replica = old_replica
                 running.settings = settings
+            else:
+                return False
+        else:
+            running.keep_mapping = keep_mapping
 
         if infix_regex is not None:
             running.infix_regex = re.compile(infix_regex)
@@ -148,10 +163,11 @@ class IndiciesReindex(RepeterVerb):
     @coroutine
     def action(self, element, running):
         index_name = element[0]
-        index = element[1]
+        index_data = yield from self.api.escnx.indices.get(index_name)
+        index = list(index_data.values())[0]
         if running.infix_regex is not None:
             match = running.infix_regex.match(index_name)
-            if match is not None and len(match.groups()) == 1:
+            if match is not None and len(match.groups()) >= 1:
                 infix = match.group(1)
             else:
                 raise ESLibError('invalid matching pattern')
@@ -162,57 +178,56 @@ class IndiciesReindex(RepeterVerb):
         if v:
             raise ESLibError('%s already exists' % new_index_name)
 
-        if running.mappings is None:
-            print("reusing mapping")
+        if running.mappings is None and running.keep_mapping:
             mappings = index['mappings']
             settings = index['settings']
-            old_replica = settings.get('index', {}).get('number_of_replicas', None)
-            settings['index']['number_of_replicas'] = 0
-        else:
+        elif running.mappings is not None:
             mappings = running.mappings
             settings = dict(running.settings)
-            old_replica = running.old_replica
-        for k in 'creation_date', 'uuid', 'provided_name':
-            if k in settings.get('index'):
+        else:
+            settings = {'index': {}}
+            mappings = {}
+        for k in 'creation_date', 'uuid', 'provided_name', 'version':
+            if k in settings.get('index', {}):
                 del settings.get('index')[k]
-        settings.get('index', {}).pop('version', None)
 
-        # Create the index with an empty mapping
-        yield from self.api.escnx.indices.create(index=new_index_name, body={'settings': settings, "mappings": mappings})
+        new_index_settings = settings
+        if running.codec:
+            new_index_settings['index']['codec'] = running.codec
+        # Create the index
+        yield from self.api.escnx.indices.create(index=new_index_name, body={'settings': new_index_settings, "mappings": mappings})
 
         # Doing the reindexation
         reindex_status = yield from self.api.escnx.reindex(
             body={"conflicts": "proceed", 'source': {'index': index_name, 'sort': '_doc', 'size': 10000},
                   'dest': {'index': new_index_name, 'version_type': 'external'}})
 
+        yield from self.api.escnx.indices.put_settings(index=new_index_name,
+                                                       body={'index': {'translog': {'retention': {'size': '0b'}}}})
+
         # Ensure the minimum segments
-        self.api.escnx.indices.forcemerge(new_index_name, max_num_segments=1, flush=False)
+        self.api.escnx.indices.forcemerge(new_index_name, max_num_segments=1, flush=True)
 
-        # Reset the good replica number
-        if old_replica is not None and old_replica != 0:
-            yield from self.api.escnx.indices.put_settings(index=new_index_name,
-                                                body={'index': {'number_of_replicas': old_replica}})
+        # Only delete if not failure
+        if len(reindex_status['failures']) == 0:
+            # Moving aliases
+            aliases = index['aliases']
+            aliases_actions = []
+            if len(aliases) > 0:
+                for a in aliases:
+                    aliases_actions.append({'remove': {'index': index_name, 'alias': a}})
+                    aliases_actions.append({'add': {'index': new_index_name, 'alias': a}})
+                yield from self.api.escnx.indices.update_aliases(body={'actions': aliases_actions})
 
-        # Moving aliases
-        aliases = index['aliases']
-        aliases_actions = []
-        if len(aliases) > 0:
-            for a in aliases:
-                aliases_actions.append({'remove': {'index': index_name, 'alias': a}})
-                aliases_actions.append({'add': {'index': new_index_name, 'alias': a}})
-            yield from self.api.escnx.indices.update_aliases(body={
-                'actions': aliases_actions
-            })
+            yield from self.api.escnx.indices.delete(index=index_name)
 
-        yield from self.api.escnx.indices.delete(index=index_name)
-
-        # the old index was not suffixed, keep it's name as an alias
-        if infix == index_name:
-            yield from self.api.escnx.indices.update_aliases(body={
-                'actions': [
-                    {'add': {'index': new_index_name, 'alias': index_name}}
-                ]
-            })
+            # the old index was not suffixed, keep it's name as an alias
+            if infix == index_name:
+                yield from self.api.escnx.indices.update_aliases(body={
+                    'actions': [
+                        {'add': {'index': new_index_name, 'alias': index_name}}
+                    ]
+                })
         return reindex_status
 
 
@@ -281,18 +296,26 @@ class IndiciesAddMapping(RepeterVerb):
 
     def fill_parser(self, parser):
         parser.add_option("-f", "--mapping_file", dest="mapping_file_name", help="The file with the added mapping", default=None)
-        parser.add_option("-t", "--type", dest="type", help="The type to add the mapping to", default='_default')
+        parser.add_option("-t", "--type", dest="type", help="The type to add the mapping to", default='_default_')
 
     @coroutine
     def check_verb_args(self, running, *args, mapping_file_name=None, type='_default_', **kwargs):
         with open(mapping_file_name, "r") as mapping_file:
-            running.mapping = load(mapping_file)
+            running.mapping = load(mapping_file, Loader=Loader)
+        if 'mappings' in running.mapping:
+            running.mapping = running.mapping['mappings']
+        if type in running.mapping:
+            running.mapping = running.mapping[type]
+        if 'properties' in running.mapping:
+            running.properties = running.mapping['properties']
+        else:
+            raise Exception("type not found in mapping")
         running.type = type
         yield from super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
     def action(self, element, running):
-        val = yield from self.api.escnx.indices.put_mapping(index=element[0], body={"properties": running.mapping}, doc_type=running.type)
+        val = yield from self.api.escnx.indices.put_mapping(index=element[0], body={"properties": running.properties}, doc_type=running.type)
         return val
 
     def to_str(self, running, value):
@@ -330,11 +353,11 @@ class IndicesGetFieldMapping(RepeterVerb):
         try:
             val = yield from self.api.escnx.indices.get_mapping(index=element[0], doc_type=running.type)
             return val
-        except elasticsearch.exceptions.NotFoundError as e:
+        except NotFoundError as e:
             return e
 
     def result_is_valid(self, result):
-        return not isinstance(result, elasticsearch.exceptions.ElasticsearchException)
+        return not isinstance(result, ElasticsearchException)
 
     def format(self, running, index, result):
         mappings = result[index]
