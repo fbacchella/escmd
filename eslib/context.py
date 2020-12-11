@@ -289,3 +289,7 @@ class Context(object):
             self.loop = None
         self.escnx = None
         self.connected = False
+
+    @property
+    def timeout(self):
+        return self.current_config['api']['timeout']

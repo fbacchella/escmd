@@ -82,8 +82,8 @@ class IndiciesForceMerge(RepeterVerb):
             yield from self.api.escnx.indices.close(index=running.index_name)
             yield from self.api.escnx.indices.put_settings(index=running.index_name,
                                                            body={'index': {'codec': running.codec}})
-            yield from self.api.escnx.indices.open(index=running.index_name, wait_for_active_shards='all')
-
+            yield from self.api.escnx.indices.open(index=running.index_name, wait_for_active_shards='all',
+                                                   timeout="%ds" % self.api.timeout)
         val = yield from self.api.escnx.indices.forcemerge(running.index_name, max_num_segments=running.max_num_segments, flush=True)
         return val
 
