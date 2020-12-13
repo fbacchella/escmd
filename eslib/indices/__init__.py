@@ -202,11 +202,8 @@ class IndiciesReindex(RepeterVerb):
             body={"conflicts": "proceed", 'source': {'index': index_name, 'sort': '_doc', 'size': 10000},
                   'dest': {'index': new_index_name, 'version_type': 'external'}})
 
-        yield from self.api.escnx.indices.put_settings(index=new_index_name,
-                                                       body={'index': {'translog': {'retention': {'size': '0b'}}}})
-
         # Ensure the minimum segments
-        self.api.escnx.indices.forcemerge(new_index_name, max_num_segments=1, flush=True)
+        yield from self.api.escnx.indices.forcemerge(new_index_name, max_num_segments=1, flush=True)
 
         # Only delete if not failure
         if len(reindex_status['failures']) == 0:
