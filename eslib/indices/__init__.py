@@ -17,34 +17,29 @@ class IndicesDispatcher(Dispatcher):
 
     def fill_parser(self, parser):
         parser.add_option("-n", "--name", dest="name", help="index filter")
-        parser.add_option("--expand_wildcards", dest="expand_wildcards", help="expand wildcards", default=None)
 
     @coroutine
-    def check_noun_args(self, running, name='_all', ignore_unavailable=None, allow_no_indices=None, expand_wildcards= None, **kwargs):
+    def check_noun_args(self, running, name='_all', **kwargs):
         running.index_name = name
-        running.ignore_unavailable = ignore_unavailable
-        running.allow_no_indices = allow_no_indices
-        running.expand_wildcards = expand_wildcards
 
     @coroutine
     def get(self, running):
         val = yield from self.api.escnx.cat.indices(index=running.index_name,
-                                              expand_wildcards=running.expand_wildcards,
-                                              format='json',
-                                              h='index')
+                                                    format='json',
+                                                    h='index')
         return {k['index']: {} for k in val}
 
 
 @command(IndicesDispatcher, verb='list')
 class IndiciesList(List):
 
-    template = lambda self, x, y: "%s\t%12d\t%4d\t%12d" % (x, y['indices'][x]['primaries']['docs']['count'], y['indices'][x]['primaries']['segments']['count'], y['indices'][x]['primaries']['store']['size_in_bytes'])
+    template = lambda self, x, y: "%s\t%12d\t%4d\t%12s" % (x, y['indices'][x]['primaries']['docs']['count'], y['indices'][x]['primaries']['segments']['count'], y['indices'][x]['primaries']['store']['size'])
 
     @coroutine
     def get_elements(self, running):
         vals = []
         for i in running.object.keys():
-            stats = yield from self.api.escnx.indices.stats(index=i)
+            stats = yield from self.api.escnx.indices.stats(index=i, human=True)
             vals.append((i, stats))
         return vals
 
