@@ -136,7 +136,6 @@ content_type_re = re.compile("(?P<content_type>.*?); (?:charset=(?P<charset>.*))
 
 def return_error(status_code, raw_data, content_type=None, http_message=None, url=None):
     """ Locate appropriate exception and raise it. """
-
     error_message = raw_data
     additional_info = None
     if raw_data and content_type == 'application/json':
@@ -453,7 +452,6 @@ class PyCurlConnection(Connection):
 
         if self.http_version is not None:
             settings[pycurl.HTTP_VERSION] = self.http_version
-
         if self.use_ssl:
             # Strict TLS check
             if self.verify_certs:

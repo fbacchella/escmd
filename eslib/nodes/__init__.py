@@ -22,7 +22,7 @@ class NodesDispatcher(Dispatcher):
     @coroutine
     def get(self, running):
         if running.node_name is None or len(running.node_name) == 0:
-            node_name = '*'
+            node_name = '_all'
         else:
             node_name = running.node_name
         nodes = yield from self.api.escnx.nodes.info(node_name, metric=running.metrics)
@@ -52,7 +52,7 @@ class NodesDump(DumpVerb):
         super().fill_parser(parser)
 
     @coroutine
-    def check_verb_args(self, running, *args, metrics=[], **kwargs):
+    def check_verb_args(self, running, *args, **kwargs):
         running.metrics = None
         yield from super().check_verb_args(running, *args, **kwargs)
 
