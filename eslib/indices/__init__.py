@@ -17,17 +17,26 @@ class IndicesDispatcher(Dispatcher):
 
     def fill_parser(self, parser):
         parser.add_option("-n", "--name", dest="name", help="index filter")
+        parser.add_option("--ignore_unavailable", dest="ignore_unavailable", help="ignore unavailable", default=None, action='store_true')
+        parser.add_option("--allow_no_indices", dest="allow_no_indices", help="allow no indices", default=None, action='store_true')
+        parser.add_option("--expand_wildcards", dest="expand_wildcards", help="expand wildcards", default=None)
 
     @coroutine
-    def check_noun_args(self, running, name='_all', **kwargs):
+    def check_noun_args(self, running, name='_all', ignore_unavailable=None, allow_no_indices=None, expand_wildcards= None, **kwargs):
         running.index_name = name
+        running.ignore_unavailable = ignore_unavailable
+        running.allow_no_indices = allow_no_indices
+        running.expand_wildcards = expand_wildcards
 
     @coroutine
     def get(self, running):
-        val = yield from self.api.escnx.cat.indices(index=running.index_name,
-                                                    format='json',
-                                                    h='index')
-        return {k['index']: {} for k in val}
+        val = yield from self.api.escnx.indices.get(index=running.index_name,
+                                                    expand_wildcards=running.expand_wildcards,
+                                                    allow_no_indices=running.allow_no_indices,
+                                                    ignore_unavailable=running.ignore_unavailable,
+                                                    filter_path='*.settings.index.uuid'
+        )
+        return val
 
 
 @command(IndicesDispatcher, verb='list')
@@ -63,7 +72,8 @@ class IndiciesForceMerge(RepeterVerb):
         else:
             running.codec = None
 
-        yield from super().check_verb_args(running, *args, **kwargs)
+        val = yield from super().check_verb_args(running, *args, **kwargs)
+        return val
 
     @coroutine
     def execute(self, running):
