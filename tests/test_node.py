@@ -5,18 +5,6 @@ import tests
 
 class NodeTestCase(tests.TestCaseProvider):
 
-    def test_cat_json(self):
-        dispatcher = eslib.dispatchers['node']()
-        dispatcher.api = self.ctx
-        running = self._run_action(dispatcher, 'cat', object_args=['-f', 'json'])
-        print(running.object)
-        self.assertIsInstance(running.object, list)
-        self.assertEqual(len(running.object), 1)
-        for i in running.object:
-            self.assertIsInstance(i, dict)
-            self.assertIn('jdk', i)
-            self.assertIn('node.role', i)
-
     def test_dump(self):
         dispatcher = eslib.dispatchers['node']()
         dispatcher.api = self.ctx
@@ -27,7 +15,6 @@ class NodeTestCase(tests.TestCaseProvider):
         for n, data in running.object.items():
             self.assertIsInstance(n, str)
             self.assertIsInstance(data, dict)
-            print(data.keys())
             self.assertIn('os', data)
             self.assertIn('http', data)
             self.assertIn('ip', data)

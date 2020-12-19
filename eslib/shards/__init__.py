@@ -1,4 +1,5 @@
 from asyncio import coroutine
+import json
 
 from eslib.dispatcher import dispatcher, command, Dispatcher
 from eslib.verb import Verb, CatVerb
@@ -8,38 +9,61 @@ from eslib.tree import TreeNode
 @dispatcher(object_name="shard")
 class ShardsDispatcher(Dispatcher):
 
-    @coroutine
     def check_noun_args(self, running):
-        pass
+        return {}
 
     @coroutine
     def get(self, running):
-        return None
+        return {}
 
 
-@command(ShardsDispatcher, verb='assign')
-class ShardsAssign(Verb):
+@command(ShardsDispatcher, verb='move')
+class ShardsMove(Verb):
 
     def fill_parser(self, parser):
-        parser.add_option("-p", "--allow_primary", dest="allow_primary", default=False, action='store_true')
+        super().fill_parser(parser)
+        parser.add_option("-d", "--dry_run", dest="dry_run", default=False, action='store_true')
+        parser.add_option("-e", "--explain", dest="explain", default=False, action='store_true')
 
-    @coroutine
     def check_verb_args(self, running, *args, allow_primary=False, **kwargs):
         running.assignemnts = []
+        running.vector = []
         for i in args:
-            index, shard, node = i.split(':')
-            running.assignemnts.append({'allocate': {"index" : index, "shard" : int(shard), "node" : node, 'allow_primary': allow_primary}})
-        yield from super().check_verb_args(running, **kwargs)
+            index, shard, from_node, to_node = i.split(':')
+            running.vector.append((index, shard, from_node, to_node))
+            running.assignemnts.append({'move': {"index" : index, "shard" : int(shard), "from_node" : from_node, "to_node" : to_node}})
+        return super().check_verb_args(running, **kwargs)
 
     @coroutine
     def get(self, running):
         return True
 
     @coroutine
-    def execute(self, running):
+    def execute(self, running, dry_run=False, explain=False):
         reroute_body = {'commands': running.assignemnts}
-        val = yield from self.api.escnx.cluster.reroute(body=reroute_body)
+        val = yield from self.api.escnx.cluster.reroute(body=reroute_body, metric=['version'], dry_run=dry_run, explain=explain)
         return val
+
+    def to_str(self, running, value):
+        acknowledged = value['acknowledged']
+        explanations = value.get('explanations', None)
+        xpl = []
+        if explanations is not None:
+            for c in explanations:
+                c_cmd = c['command']
+                decisions = []
+                for d in c['decisions']:
+                    if d['decision'] == 'NO':
+                        decisions.append(d)
+                xpl.append({'command': c_cmd, 'decisions': decisions})
+            return json.dumps(xpl, indent=2, sort_keys=True)
+        elif acknowledged:
+            val = ""
+            for a in running.vector:
+                val = "%s:%s moved from %s to %s" % (a[0], a[1], a[2], a[3])
+            return val
+        else:
+            return "Moved failed"
 
 
 class ShardTreeNode(TreeNode):
@@ -65,7 +89,7 @@ class ShardTreeNode(TreeNode):
 
 
 @command(ShardsDispatcher, verb='tree')
-class ShardsList(Verb):
+class ShardsTree(Verb):
 
     statuses = set(['green', 'yellow', 'red', 'all'])
 
@@ -73,13 +97,12 @@ class ShardsList(Verb):
         parser.add_option("-s", "--status", dest="status", default='all')
         parser.add_option("-i", "--indices", dest="indices", default='*')
 
-    @coroutine
     def check_verb_args(self, running, *args, status='all', indices='*', **kwargs):
-        if not status in ShardsList.statuses:
+        if not status in ShardsTree.statuses:
             raise Exception('unknow status: %s' % status)
         running.status = status
         running.indices = indices
-        yield from super().check_verb_args(running, *args, **kwargs)
+        return super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
     def get(self, running):
@@ -106,35 +129,13 @@ class ShardsList(Verb):
     def to_str(self, running, value):
         return '%s' % value
 
-    @coroutine
-    def no_get_elements(self, running):
-        all_shards = []
-        for index, shards in running.object['indices'].items():
-            shards=shards['shards']
-            if len(shards) == 0:
-                continue
-            for shard in shards.values():
-                all_shards.append((index, shard))
-            #print(index, shards.keys())
-        return all_shards
-
-    def no_to_str(self, running, item):
-        name = item[0]
-        value = item[1]
-        return '{"%s": %s}' % (name, str(value))
-
 
 @command(ShardsDispatcher)
 class ShardsCat(CatVerb):
 
     def fill_parser(self, parser):
-        super(ShardsCat, self).fill_parser(parser)
+        super().fill_parser(parser)
         parser.add_option("-l", "--local", dest="local", default=False, action='store_true')
-
-    @coroutine
-    def check_verb_args(self, running, *args, local=False, **kwargs):
-        running.local = local
-        yield from super().check_verb_args(running, *args, **kwargs)
 
     def get_source(self):
         return self.api.escnx.cat.shards

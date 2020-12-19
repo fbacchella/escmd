@@ -12,29 +12,26 @@ except ImportError:
     from yaml import Loader, Dumper
 
 
-@dispatcher(object_name="index")
+@dispatcher(object_name="index", default_filter_path='*.settings.index.uuid')
 class IndicesDispatcher(Dispatcher):
 
     def fill_parser(self, parser):
-        parser.add_option("-n", "--name", dest="name", help="index filter")
+        parser.add_option("-n", "--name", dest="index_name", help="index filter", default='_all')
         parser.add_option("--ignore_unavailable", dest="ignore_unavailable", help="ignore unavailable", default=None, action='store_true')
         parser.add_option("--allow_no_indices", dest="allow_no_indices", help="allow no indices", default=None, action='store_true')
-        parser.add_option("--expand_wildcards", dest="expand_wildcards", help="expand wildcards", default=None)
+        parser.add_option("--expand_wildcards", dest="expand_wildcards", help="expand wildcards", default=None, action='store_true')
+
+    def check_noun_args(self, running, index_name='_all', **kwargs):
+        running.index_name = index_name
+        return super().check_noun_args(running, index_name=index_name, **kwargs)
 
     @coroutine
-    def check_noun_args(self, running, name='_all', ignore_unavailable=None, allow_no_indices=None, expand_wildcards= None, **kwargs):
-        running.index_name = name
-        running.ignore_unavailable = ignore_unavailable
-        running.allow_no_indices = allow_no_indices
-        running.expand_wildcards = expand_wildcards
-
-    @coroutine
-    def get(self, running):
-        val = yield from self.api.escnx.indices.get(index=running.index_name,
-                                                    expand_wildcards=running.expand_wildcards,
-                                                    allow_no_indices=running.allow_no_indices,
-                                                    ignore_unavailable=running.ignore_unavailable,
-                                                    filter_path='*.settings.index.uuid'
+    def get(self, running, index_name='_all', expand_wildcards=None, allow_no_indices=None, ignore_unavailable=None, filter_path='*'):
+        val = yield from self.api.escnx.indices.get(index=index_name,
+                                                    expand_wildcards=expand_wildcards,
+                                                    allow_no_indices=allow_no_indices,
+                                                    ignore_unavailable=ignore_unavailable,
+                                                    filter_path=filter_path
         )
         return val
 
@@ -45,34 +42,35 @@ class IndiciesList(List):
     template = lambda self, x, y: "%s\t%12d\t%4d\t%12s" % (x, y['indices'][x]['primaries']['docs']['count'], y['indices'][x]['primaries']['segments']['count'], y['indices'][x]['primaries']['store']['size'])
 
     @coroutine
-    def get_elements(self, running):
-        vals = []
-        for i in running.object.keys():
-            stats = yield from self.api.escnx.indices.stats(index=i, human=True)
-            vals.append((i, stats))
-        return vals
+    def action(self, element, running):
+        stats = yield from self.api.escnx.indices.stats(index=element[0], human=True)
+        return stats
 
 
 @command(IndicesDispatcher, verb='forcemerge')
-class IndiciesForceMerge(RepeterVerb):
+class IndiciesForceMerge(Verb):
 
     def fill_parser(self, parser):
         parser.add_option("-m", "--max_num_segments", dest="max_num_segments", help="Max num segmens", default=1)
         parser.add_option("-t", "--notranslog", dest="notranslog", help="Remove translog", default=False, action='store_true')
         parser.add_option("-c", "--codec", dest="codec", default=None)
 
-    @coroutine
     def check_verb_args(self, running, *args, max_num_segments=1, notranslog=False, codec=None, **kwargs):
         running.max_num_segments = max_num_segments
         running.notranslog = notranslog
         if codec == 'best_compression' or codec == 'default':
             running.codec = codec
         elif codec is not None:
-            return False
+            raise Exception('Unknown codec')
         else:
             running.codec = None
 
-        val = yield from super().check_verb_args(running, *args, **kwargs)
+        return super().check_verb_args(running, *args, **kwargs)
+
+    @coroutine
+    def get(self, running, index_name, filter_path):
+        running.index_name = index_name
+        val = yield from super().get(running, index_name=index_name, filter_path=filter_path)
         return val
 
     @coroutine
@@ -107,10 +105,10 @@ class IndiciesDelete(RepeterVerb):
         val = yield from self.api.escnx.indices.delete(index=element[0])
         return val
 
-    @coroutine
-    def check_verb_args(self, running, ):
-        if running.index_name == '*':
+    def check_verb_args(self, running):
+        if running.index_name == '*' or running.index_name == '_all':
             raise Exception("won't destroy everything, -n/--name mandatory")
+        return super().check_verb_args(running)
 
     def format(self, running, name, result):
         return "%s deleted" % name
@@ -127,7 +125,6 @@ class IndiciesReindex(RepeterVerb):
         parser.add_option("-i", "--infix_regex", dest="infix_regex", default=None)
         parser.add_option("-c", "--codec", dest="codec", default=None)
 
-    @coroutine
     def check_verb_args(self, running, *args, template_name=None, infix_regex=None, prefix='', suffix='', keep_mapping=False,
                         codec=None,
                         **kwargs):
@@ -141,19 +138,8 @@ class IndiciesReindex(RepeterVerb):
         else:
             running.codec = None
         if template_name is not None:
-            templates = yield from self.api.escnx.indices.get_template(name=template_name)
+            running.template_name = template_name
             running.keep_mapping = False
-            if template_name in templates:
-                template = templates[template_name]
-                settings = template['settings']
-                mappings = template['mappings']
-                old_replica = settings.get('index', {}).get('number_of_replicas', None)
-                settings['index']['number_of_replicas'] = 0
-                running.mappings = mappings
-                running.old_replica = old_replica
-                running.settings = settings
-            else:
-                return False
         else:
             running.keep_mapping = keep_mapping
 
@@ -167,6 +153,21 @@ class IndiciesReindex(RepeterVerb):
 
     @coroutine
     def action(self, element, running):
+        if running.template_name is not None:
+            templates = yield from self.api.escnx.indices.get_template(name=running.template_name)
+            running.keep_mapping = False
+            if running.template_name in templates:
+                template = templates[running.template_name]
+                settings = template['settings']
+                mappings = template['mappings']
+                old_replica = settings.get('index', {}).get('number_of_replicas', None)
+                settings['index']['number_of_replicas'] = 0
+                running.mappings = mappings
+                running.old_replica = old_replica
+                running.settings = settings
+            else:
+                raise ESLibError('No matching template found')
+
         index_name = element[0]
         index_data = yield from self.api.escnx.indices.get(index_name)
         index = list(index_data.values())[0]
@@ -235,14 +236,7 @@ class IndiciesReindex(RepeterVerb):
 
 @command(IndicesDispatcher, verb='dump')
 class IndiciesDump(DumpVerb):
-
-    @coroutine
-    def action(self, element, running, *args, only_keys=False, **kwargs):
-        index_dump = yield from self.api.escnx.indices.get(index=element[0])
-        newelement = list(index_dump.items())[0]
-        val = yield from super().action(newelement, running, *args, only_keys, **kwargs)
-        return val
-
+    pass
 
 @command(IndicesDispatcher, verb='readsettings')
 class IndiciesReadSettings(ReadSettings):
@@ -273,15 +267,10 @@ class IndiciesReadSettings(ReadSettings):
 class IndiciesWriteSettings(WriteSettings):
 
     @coroutine
-    def get(self, running):
-        val = yield from self.api.escnx.cat.indices(index=running.index_name, format='json', h='index')
-        return val
-
-    @coroutine
     def get_elements(self, running):
         index_names = []
         for i in running.object:
-            index_names.append((i['index'], None))
+            index_names.append((i, None))
         return index_names
 
     @coroutine
@@ -300,7 +289,6 @@ class IndiciesAddMapping(RepeterVerb):
         parser.add_option("-f", "--mapping_file", dest="mapping_file_name", help="The file with the added mapping", default=None)
         parser.add_option("-t", "--type", dest="type", help="The type to add the mapping to", default='_default_')
 
-    @coroutine
     def check_verb_args(self, running, *args, mapping_file_name=None, type='_default_', **kwargs):
         with open(mapping_file_name, "r") as mapping_file:
             running.mapping = load(mapping_file, Loader=Loader)
@@ -313,7 +301,7 @@ class IndiciesAddMapping(RepeterVerb):
         else:
             raise Exception("type not found in mapping")
         running.type = type
-        yield from super().check_verb_args(running, *args, **kwargs)
+        return super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
     def action(self, element, running):
@@ -332,11 +320,10 @@ class IndicesGetFieldMapping(RepeterVerb):
         parser.add_option("-f", "--flat", dest="flat", default=False, action='store_true')
         parser.add_option("-p", "--pretty", dest="pretty", default=False, action='store_true')
 
-    @coroutine
     def check_verb_args(self, running, *args, flat=False, type='_default_', **kwargs):
         running.type = type
         running.flat = flat
-        yield from super().check_verb_args(running, *args, **kwargs)
+        return super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
     def get(self, running):
@@ -384,10 +371,9 @@ class IndiciesCat(CatVerb):
         super(IndiciesCat, self).fill_parser(parser)
         parser.add_option("-l", "--local", dest="local", default=False, action='store_true')
 
-    @coroutine
     def check_verb_args(self, running, *args, local=False, **kwargs):
         running.local = local
-        yield from super().check_verb_args(running, *args, **kwargs)
+        return super().check_verb_args(running, *args, **kwargs)
 
     def get_source(self):
         return self.api.escnx.cat.indices
@@ -410,10 +396,9 @@ class IndicesCreate(Verb):
     def fill_parser(self, parser):
         parser.add_option("-b", "--settingsbody", dest="max_num_segments", help="Max num segmens", default=1)
 
-    @coroutine
     def check_verb_args(self, running, *args, max_num_segments=1, **kwargs):
         running.max_num_segments = max_num_segments
-        yield from super().check_verb_args(running, *args, **kwargs)
+        return super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
     def get(self, running):
@@ -441,22 +426,17 @@ class IndicesStats(DumpVerb):
         parser.add_option("-m", "--metrics", dest="metrics", help="Metrics list[]", default=None, action='append')
         parser.add_option("-f", "--flat", dest="flat", help="Flatten stats", default=False, action='store_true')
 
-    @coroutine
     def check_verb_args(self, running, *args, metrics=None, flat=False, **kwargs):
         if metrics is not None:
             running.metrics = ','.join(metrics)
         else:
             running.metrics = None
         running.flat = flat
-        yield from super().check_verb_args(running, *args, **kwargs)
+        return super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
-    def get(self, running):
-        return None
-
-    @coroutine
-    def execute(self, running):
-        val = yield from self.api.escnx.indices.stats(running.index_name, metric=running.metrics)
+    def action(self, element, running, *args, only_keys=False, **kwargs):
+        val = yield from self.api.escnx.indices.stats(element[0], metric=running.metrics)
         return val
 
     def to_str(self, running, value):
@@ -464,4 +444,4 @@ class IndicesStats(DumpVerb):
             pass
             #value = {k.replace('index.', ''): v for k, v in index_data['defaults'].items()}
         else:
-            return dumps(value)
+            return dumps(value[1])

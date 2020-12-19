@@ -30,7 +30,6 @@ class Verb(object):
         (verb_options, verb_args) = parser.parse_args(args)
         return (verb_options, verb_args)
 
-    @coroutine
     def check_noun_args(self, running, **kwargs):
         """
         Check and eventually parse the argument given to the noun.
@@ -39,15 +38,14 @@ class Verb(object):
         :param kwargs:
         :return:
         """
-        yield from self.dispatcher.check_noun_args(running, **kwargs)
+        return self.dispatcher.check_noun_args(running, **kwargs)
 
-    @coroutine
     def check_verb_args(self, running, *args, **kwargs):
-        pass
+        return kwargs
 
     @coroutine
-    def get(self, running):
-        val = yield from self.dispatcher.get(running)
+    def get(self, running, **kwargs):
+        val = yield from self.dispatcher.get(running, **kwargs)
         return val
 
     @coroutine
@@ -135,21 +133,26 @@ class DumpVerb(RepeterVerb):
         super().fill_parser(parser)
         parser.add_option("-k", "--only_keys", dest="only_keys", default=False, action='store_true')
         parser.add_option("-p", "--pretty", dest="pretty", default=False, action='store_true')
+        super().fill_parser(parser)
 
-    @coroutine
     def check_verb_args(self, running, *args, pretty=False, only_keys=False, **kwargs):
         if pretty:
             running.formatting = {'indent': 2, 'sort_keys': True}
         else:
             running.formatting = {}
         running.only_keys = only_keys
-        running.args_vector = args
-        yield from super().check_verb_args(running, **kwargs)
+        running.attrs = args
+        return super().check_verb_args(running, pretty=pretty, **kwargs)
+
+    @coroutine
+    def get(self, running, **kwargs):
+        val = yield from self.dispatcher.get(running, **kwargs)
+        return val
 
     @coroutine
     def action(self, element, running, *args, only_keys=False, **kwargs):
         curs = element[1]
-        for i in running.args_vector:
+        for i in running.attrs:
             if not isinstance(curs, dict) or curs is None:
                 break
             curs = curs.get(i, None)
@@ -160,36 +163,50 @@ class DumpVerb(RepeterVerb):
 
     def to_str(self, running, result):
         item = result[1]
+        identity = item[0]
+        values = item[1]
         if item is None:
             return None
+        elif len(running.attrs) == 1:
+            if running.attrs[0] in values:
+                content = values[running.attrs[0]]
+            else:
+                content = None
+        elif len(running.attrs) > 0:
+            interested_in = {i: values[i] for i in running.attrs if i in values}
+            content = self.filter_dump(running, interested_in)
         elif running.only_keys:
-            return json.dumps({item[0]: list(item[1])}, **running.formatting)
+            content = self.filter_dump(identity, list(values))
         else:
-            return json.dumps({item[0]: item[1]}, **running.formatting)
+            content = self.filter_dump(identity, values)
+        return json.dumps(content, **running.formatting)
+
+    def filter_dump(self, running, *args, **kwargs):
+        if len(args) == 1:
+            return args
+        elif len(args) == 2:
+            return {args[0]: args[1]}
 
 
 class List(RepeterVerb):
     verb = "list"
     template = "{name!s}"
 
-    @coroutine
-    def check_verb_args(self, running, *args, template=None, **kwargs):
+    def check_verb_args(self, running, template=None, **kwargs):
         running.template = template
-        super().check_verb_args(*args, **kwargs)
+        return super().check_verb_args(running, **kwargs)
 
     def fill_parser(self, parser):
         super(List, self).fill_parser(parser)
         parser.add_option("-t", "--template", dest="template", default=None)
 
-    def execute(self, running):
-        val = yield from self.get_elements(running)
-        def enumerator():
-            for i in val:
-                yield i
-        return enumerator()
+    @coroutine
+    def action(self, element, running, **kwargs):
+        node_info = self.dispatcher.get(running, **kwargs)
+        return node_info
 
     def to_str(self, running, item):
-        name = item[0]
+        name = item[0][0]
         value = item[1]
         template = running.template
         if template is None:
@@ -200,50 +217,30 @@ class List(RepeterVerb):
             return str(template(name, value))
 
 
-class CatVerb(List):
+class CatVerb(Verb):
     verb = "cat"
 
     def fill_parser(self, parser):
-        parser.add_option("-H", "--headers", dest="headers", default='*')
+        super().fill_parser(parser)
+        parser.add_option("-H", "--headers", dest="h", default=None)
         parser.add_option("-f", "--format", dest="format", default='text')
-        parser.add_option("-b", dest="bytes_format", default=False, action='store_true')
         parser.add_option("-p", "--pretty", dest="pretty", default=False, action='store_true')
 
-    @coroutine
-    def check_verb_args(self, running, *args, headers='*', format='text', pretty=False, bytes_format=False, **kwargs):
-        running.h = headers
-        running.format = format
-        running.pretty = pretty
-        if bytes_format:
-            running.bytes = 'b'
+    def check_verb_args(self, running, *args, pretty=False, **kwargs):
         if pretty:
             running.formatting = {'indent': 2, 'sort_keys': True}
         else:
             running.formatting = {}
-        super().check_verb_args(*args, **kwargs)
-
-    def get_source(self):
-        raise NotImplementedError
+        return super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
     def get(self, running, **kwargs):
-        catargs = {}
-        for a in ('format', 'h', 'local', 'nodes', 'bytes'):
-            if hasattr(running, a):
-                catargs[a] = getattr(running, a)
-        val = yield from self.get_source()(**catargs)
-        return val
+        return {}
 
     @coroutine
-    def get_elements(self, running):
-        if running.object is None:
-            return ()
-        elif running.format == 'json':
-            return iter(running.object)
-        elif running.format == 'text':
-            return running.object.splitlines()
-        else:
-            return ()
+    def execute(self, running, **kwargs):
+        val = yield from self.get_source()(**kwargs)
+        return val
 
     def to_str(self, running, item):
         if isinstance(item, str):
@@ -262,6 +259,7 @@ class Remove(Verb):
 class RemoveForce(Remove):
 
     def fill_parser(self, parser):
+        super().fill_parser(parser)
         parser.add_option("-f", "--force", dest="force", help="Force", default=False, action='store_true')
 
 
@@ -272,11 +270,9 @@ class RemoveForce(Remove):
 class ReadSettings(DumpVerb):
 
     def fill_parser(self, parser):
-        parser.add_option("-k", "--only_keys", dest="only_keys", default=False, action='store_true')
-        parser.add_option("-p", "--pretty", dest="pretty", default=False, action='store_true')
+        super().fill_parser(parser)
         parser.add_option("-f", "--flat", dest="flat", default=False, action='store_true')
 
-    @coroutine
     def check_verb_args(self, running, *args, flat=False, **kwargs):
         running.flat = flat if len(args) == 0 else True
         running.settings = set(args)
@@ -320,9 +316,9 @@ class WriteSettings(RepeterVerb):
     keydepth_re = re.compile(r'^([-a-zA-Z0-9_]+)(?:\.(.*))?$')
 
     def fill_parser(self, parser):
+        super().fill_parser(parser)
         parser.add_option('-f', '--settings_file', dest='settings_file_name', default=None)
 
-    @coroutine
     def check_verb_args(self, running, *args, settings_file_name=None, **kwargs):
         values = {}
         if settings_file_name is not None:
@@ -340,7 +336,7 @@ class WriteSettings(RepeterVerb):
         if failed:
             raise Exception('invalid key ' + i)
         running.values = values
-        super().check_verb_args(running, **kwargs)
+        return super().check_verb_args(running, **kwargs)
 
     def _path_to_dict(self, path, value, current_dict = None):
         if current_dict is None:

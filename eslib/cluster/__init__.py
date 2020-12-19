@@ -9,9 +9,8 @@ import json
 @dispatcher(object_name="cluster")
 class ClusterDispatcher(Dispatcher):
 
-    @coroutine
-    def check_noun_args(self, running):
-        pass
+    def get(self, running, **kwargs):
+        return {}
 
 
 @command(ClusterDispatcher, verb='master')
@@ -21,11 +20,10 @@ class ClusterMaster(CatVerb):
         super(ClusterMaster, self).fill_parser(parser)
         parser.add_option("-l", "--local", dest="local", default=False, action='store_true')
 
-    @coroutine
     def check_verb_args(self, running, *args, local=False, **kwargs):
         running.local = local
         running.args = args
-        yield from super().check_verb_args(running, *args, **kwargs)
+        return super().check_verb_args(running, *args, **kwargs)
 
     def get_source(self):
         return self.api.escnx.cat.master
@@ -34,7 +32,7 @@ class ClusterMaster(CatVerb):
         if len(running.args) == 1 and isinstance(item, dict):
             return item[running.args[0]]
         else:
-            return super(ClusterMaster, self).to_str(running, item)
+            return super().to_str(running, item[0])
 
 
 @command(ClusterDispatcher, verb='health')
@@ -42,16 +40,16 @@ class ClusterHealth(DumpVerb):
 
     def fill_parser(self, parser):
         parser.add_option("-w", "--wait_for", dest="wait_for", default=None)
+        parser.add_option("-l", "--level", dest="level", default='cluster')
         super().fill_parser(parser)
 
     @coroutine
-    def get(self, running):
-        return None
+    def get(self, running, **kwargs):
+        return {}
 
-    @coroutine
-    def check_verb_args(self, running, *args, **kwargs):
-        if kwargs.get('wait_for', None) is not None:
-            waited_parts = kwargs['wait_for'].split(':')
+    def check_verb_args(self, running, *args, wait_for=None, level=None, **kwargs):
+        if wait_for is not None:
+            waited_parts = wait_for.split(':')
             if len(waited_parts) == 2:
                 (waited_type, waited_value) = waited_parts
                 running.waited_type = waited_type
@@ -59,36 +57,28 @@ class ClusterHealth(DumpVerb):
             elif len(waited_parts) == 1:
                 running.waited_type = 'status'
                 running.waited_value = waited_parts[0]
-
         else:
             running.waited_type = None
-        running.args = args
-        yield from super().check_verb_args(running, *args, **kwargs)
+        if not level in ('cluster', 'indices', 'shards'):
+            raise Exception('Unknow level: "%s"' % level)
+        return super().check_verb_args(running, *args, level=level, **kwargs)
 
     @coroutine
-    def execute(self, running):
+    def execute(self, running, level, pretty=None, **kwargs):
         waited = {}
         if running.waited_type is not None:
             waited['wait_for_' + running.waited_type] = running.waited_value
-        val = yield from self.api.escnx.cluster.health(level='cluster', **waited)
+        val = yield from self.api.escnx.cluster.health(level=level, **waited, pretty=pretty)
         return val
 
     def to_str(self, running, item):
-        if item is None:
-            return None
-        if len(running.args) == 1:
-            if running.args[0] in item:
-               return item[running.args[0]]
-        if len(running.args) > 0:
-            values = {}
-            for i in running.args:
-                if i in item:
-                    values[i] = item[i]
-            return json.dumps(values, **running.formatting)
-        elif running.only_keys:
-            return json.dumps(list(item.keys()), **running.formatting)
+        return super().to_str(running, (None, (None, item)))
+
+    def filter_dump(self, running, *args, **kwargs):
+        if len(args) == 1:
+            return args[0]
         else:
-            return json.dumps(item, **running.formatting)
+            return args[1]
 
 
 @command(ClusterDispatcher, verb='allocation_explain')
@@ -98,17 +88,12 @@ class ClusterAllocationExplain(DumpVerb):
         parser.add_option("-w", "--wait_for", dest="wait_for", default=None)
         super().fill_parser(parser)
 
-    @coroutine
-    def get(self, running):
-        return None
-
-    @coroutine
     def check_verb_args(self, running, *args, **kwargs):
         running.args = args
-        yield from super().check_verb_args(running, *args, **kwargs)
+        return super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
-    def execute(self, running):
+    def execute(self, running, **kwargs):
         try:
             val = yield from self.api.escnx.cluster.allocation_explain()
         except RequestError as e:
@@ -131,25 +116,20 @@ class ClusterAllocationExplain(DumpVerb):
 class ClusterReroute(DumpVerb):
 
     def fill_parser(self, parser):
-        parser.add_option("-f", "--retry_failed", dest="retry_failed", default=False)
-        parser.add_option("--dry_run", dest="dry_run", default=False)
+        parser.add_option("-f", "--retry_failed", dest="retry_failed", default=False, action='store_true')
+        parser.add_option("--dry_run", dest="dry_run", default=False, action='store_true')
         super().fill_parser(parser)
 
-    @coroutine
-    def get(self, running):
-        return None
-
-    @coroutine
     def check_verb_args(self, running, *args, **kwargs):
         if kwargs.get('retry_failed', None) is not None:
             running.retry_failed = kwargs['retry_failed']
         if kwargs.get('dry_run', None) is not None:
             running.dry_run = kwargs['dry_run']
         running.args = args
-        yield from super().check_verb_args(running, *args, **kwargs)
+        return super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
-    def execute(self, running):
+    def execute(self, running, **kwargs):
         val = yield from self.api.escnx.cluster.reroute(retry_failed=running.retry_failed, dry_run=running.dry_run)
         return val
 
@@ -189,6 +169,10 @@ class ClusterWriteSettings(WriteSettings):
         parser.add_option("-t", "--transient", dest="transient", default=True, action="callback", callback=set_transient)
         return super().fill_parser(parser)
 
+    def check_verb_args(self, running, *args, persistent=False, transient=True, **kwargs):
+        running.destination = 'persistent' if persistent else 'transient'
+        return super().check_verb_args(running, *args, **kwargs)
+
     @coroutine
     def get_elements(self, running):
         return (None,)
@@ -196,11 +180,6 @@ class ClusterWriteSettings(WriteSettings):
     @coroutine
     def get(self, running):
         return None
-
-    @coroutine
-    def check_verb_args(self, running, *args, persistent=False, transient=True, **kwargs):
-        running.destination = 'persistent' if persistent else 'transient'
-        yield from super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
     def action(self, element, running):

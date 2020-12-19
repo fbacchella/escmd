@@ -8,24 +8,33 @@ from eslib.dispatcher import dispatcher, command, Dispatcher
 from asyncio import coroutine
 
 
-@dispatcher(object_name="template")
+@dispatcher(object_name="template", default_filter_path='*.order')
 class TemplatesDispatcher(Dispatcher):
 
     def fill_parser(self, parser):
-        parser.add_option("-n", "--name", dest="template_name", help="nodes filter")
+        parser.add_option("-n", "--name", dest="template_name", default=None, help="nodes filter")
+
+    def check_noun_args(self, running, template_name=None, **kwargs):
+        running.template_name = template_name
+        return super().check_noun_args(running, template_name=template_name, **kwargs)
 
     @coroutine
-    def check_noun_args(self, running, template_name=''):
-        running.template_name = template_name
-
-    def get(self, running):
-        val = yield from self.api.escnx.indices.get_template(name=running.template_name)
+    def get(self, running, template_name=None, filter_path=None):
+        val = yield from self.api.escnx.indices.get_template(name=template_name, filter_path=filter_path)
         return val
 
 
 @command(TemplatesDispatcher)
 class TemplatesList(List):
-    pass
+
+    @coroutine
+    def action(self, element, running):
+        template = yield from self.api.escnx.indices.get_template(element[0], filter_path='*.order,*.index_patterns')
+        return template
+
+    def to_str(self, running, item):
+        name, value = list(item[1].items())[0]
+        return "%s %s" % (name, value)
 
 
 @command(TemplatesDispatcher, verb='dump')
@@ -40,7 +49,6 @@ class TemplatesPut(Verb):
         parser.add_option("-f", "--template_file", dest="template_file_name", default=None)
         parser.add_option("-p", "--template_pattern", dest="template_pattern", default=[], action='append')
 
-    @coroutine
     def check_verb_args(self, running, *args, template_file_name=None, template_pattern=None, **kwargs):
         with open(template_file_name, "r") as template_file:
             running.template = load(template_file, Loader=Loader)
@@ -48,11 +56,11 @@ class TemplatesPut(Verb):
             running.template['index_patterns'] = template_pattern
             if 'template' in running.template:
                 del running.template['template']
-        yield from super().check_verb_args(running, *args, **kwargs)
+        return super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
-    def get(self, running):
-        return None
+    def get(self, running, template_name, filter_path):
+        return {}
 
     @coroutine
     def execute(self, running):
@@ -80,10 +88,10 @@ class TemplatesDelete(RepeterVerb):
         val = yield from self.api.escnx.indices.delete_template(name=element[0])
         return val
 
-    @coroutine
-    def check_verb_args(self, running, ):
-        if running.template_name == '*':
+    def check_verb_args(self, running):
+        if running.template_name == '*' or running.template_name == '__all':
             raise Exception("won't destroy everything, -n/--name mandatory")
+        return super().check_verb_args(running)
 
     def format(self, running, name, result):
         return "%s deleted" % name
@@ -95,11 +103,6 @@ class TemplatesCat(CatVerb):
     def fill_parser(self, parser):
         super(TemplatesCat, self).fill_parser(parser)
         parser.add_option("-l", "--local", dest="local", default=False, action='store_true')
-
-    @coroutine
-    def check_verb_args(self, running, *args, local=False, **kwargs):
-        running.local = local
-        yield from super().check_verb_args(running, *args, **kwargs)
 
     def get_source(self):
         return self.api.escnx.cat.templates

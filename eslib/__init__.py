@@ -1,9 +1,9 @@
 import re
 
 def join_default(val, default):
-    for key in default:
-        if key not in val:
-            val[key] = default[key]
+    for key, value in default.items():
+        if key not in val and value is not None:
+            val[key] = value
 
 
 units = {

@@ -4,7 +4,16 @@ import json
 import tests
 
 
-class IndicesTestCase(tests.TestCaseProvider):
+class ClusterTestCase(tests.TestCaseProvider):
+
+    def test_write_settings_cluster(self):
+        dispatcher = eslib.dispatchers['cluster']()
+        def tester(running, j):
+            self.assertIsInstance(j, tuple)
+            source, settings = j
+            self.assertIsNone(source)
+            self.assertIsInstance(settings, dict)
+        self.action_write_settings(dispatcher, ['cluster.routing.allocation.enable=all'], tester)
 
     def test_read_settings_cluster_json(self):
         dispatcher = eslib.dispatchers['cluster']()

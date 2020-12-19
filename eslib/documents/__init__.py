@@ -17,7 +17,6 @@ class DocumentDispatcher(Dispatcher):
         parser.add_option("-S", "--size", dest="size", help="size", action="store", type="int")
         parser.add_option("-t", "--type", dest="doc_type", help="Document type", action="store", default=None)
 
-    @coroutine
     def check_noun_args(self, running, id=None, index_name='*', query=None, size=50, doc_type='_all'):
         running.index_name = index_name
         running.id = id
@@ -27,6 +26,7 @@ class DocumentDispatcher(Dispatcher):
             running.query = None
         running.size = size
         running.doc_type = doc_type
+        return None
 
     @coroutine
     def get(self, running):
@@ -58,7 +58,6 @@ class DocumentUpdateByQuery(Verb):
         parser.add_option("-S", "--scroll_size", dest="scroll_size", help="scroll size", default=None, action="store", type="int")
         super().fill_parser(parser)
 
-    @coroutine
     def check_verb_args(self, running, *args, script=None, scroll_size=None, **kwargs):
         if running.doc_type == '_all' or running.doc_type is None:
             running.doc_type = ''
@@ -67,7 +66,7 @@ class DocumentUpdateByQuery(Verb):
         else:
             running.langage = None
         running.scroll_size = scroll_size
-        yield from super().check_verb_args(running, *args, **kwargs)
+        return super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
     def get(self, running):
@@ -95,7 +94,7 @@ class DocumentUpdateByQuery(Verb):
 
 
 @command(DocumentDispatcher, verb='list')
-class IndiciesList(RepeterVerb):
+class DocumentsList(RepeterVerb):
 
     @coroutine
     def get_elements(self, running, **kwargs):

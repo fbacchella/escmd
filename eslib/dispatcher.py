@@ -1,5 +1,5 @@
-from eslib.exceptions import ESLibError, ESLibNotFoundError
-from eslib import dispatchers
+from eslib.exceptions import ESLibError
+from eslib import dispatchers, join_default
 from eslib.running import Running
 from asyncio import coroutine
 import elasticsearch.exceptions
@@ -13,9 +13,10 @@ def command(dispatcher_class, verb=None):
     return decorator
 
 
-def dispatcher(object_name):
+def dispatcher(object_name, default_filter_path=None):
     def decorator(dispatcher_class):
         dispatcher_class.object_name = object_name
+        dispatcher_class.default_filter_path = default_filter_path
         setattr(dispatcher_class, 'verbs', {})
         dispatchers[object_name] = dispatcher_class
 
@@ -37,12 +38,12 @@ class Dispatcher(object):
     def execute(self):
         raise NotImplementedError
 
-    @coroutine
     def check_noun_args(self, running, **kwargs):
-        raise NotImplementedError
+        join_default(kwargs, {'filter_path': self.default_filter_path})
+        return kwargs
 
     @coroutine
-    def get(self, running):
+    def get(self, running, **kwargs):
         raise NotImplementedError
 
     def get_cmd(self, verb):
@@ -72,10 +73,10 @@ class Dispatcher(object):
         except SystemExit:
             return None
         verb_options = self.clean_options(verb_options)
-        yield from cmd.check_noun_args(running, **object_options)
-        yield from cmd.check_verb_args(running, *verb_args, **verb_options)
-        running.object = yield from cmd.get(running)
-        running.result = yield from cmd.execute(running)
+        nounargs = cmd.check_noun_args(running, **object_options)
+        verbargs = cmd.check_verb_args(running, *verb_args, **verb_options)
+        running.object = yield from cmd.get(running, **nounargs)
+        running.result = yield from cmd.execute(running, **verbargs)
         return running
 
 

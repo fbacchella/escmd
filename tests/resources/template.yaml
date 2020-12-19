@@ -1,0 +1,10 @@
+---
+order: 0
+settings:
+  index:
+      number_of_replicas: 2
+      refresh_interval: 5s
+      number_of_shards: 1
+mappings:
+  "_doc":
+    date_detection: false

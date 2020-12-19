@@ -12,13 +12,13 @@ class TasksDispatcher(Dispatcher):
     def fill_parser(self, parser):
         parser.add_option("-i", "--id", dest="task_id", help="tasks filter")
 
-    @coroutine
-    def check_noun_args(self, running, task_id=None):
+    def check_noun_args(self, running, task_id=None, **kwargs):
         running.task_id = task_id
+        return super().check_noun_args(running, task_id=task_id, **kwargs)
 
     @coroutine
-    def get(self, running):
-        val = yield from self.api.escnx.tasks.get(task_id=running.task_id)
+    def get(self, running, task_id=None, **kwargs):
+        val = yield from self.api.escnx.tasks.get(task_id=task_id)
         return val
 
 
@@ -44,11 +44,14 @@ class TasksTree(Verb):
         parser.add_option("-a", "--actions", dest="actions", default='')
         parser.add_option("-g", "--group_by", dest="group_by", default='nodes')
 
-    @coroutine
-    def check_verb_args(self, running, *args, actions='', group_by='nodes', **kwargs):
+    #task_id is not used in tree, swallow it
+    def check_noun_args(self, running, task_id=None, **kwargs):
+        return super().check_verb_args(running, **kwargs)
+
+    def check_verb_args(self, running, group_by=None, actions=None, **kwargs):
         running.group_by = group_by
         running.actions = actions
-        yield from super().check_verb_args(running, *args, **kwargs)
+        return super().check_verb_args(running, **kwargs)
 
     @coroutine
     def get(self, running):
@@ -92,11 +95,10 @@ class TasksTree(Verb):
 @command(TasksDispatcher, verb='dump')
 class TaskDump(DumpVerb):
 
-    @coroutine
     def check_verb_args(self, running, *args, actions='', group_by='nodes', **kwargs):
         running.group_by = group_by
         running.actions = actions
-        yield from super().check_verb_args(running, *args, **kwargs)
+        return super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
     def get_elements(self, running):

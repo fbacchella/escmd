@@ -5,27 +5,25 @@ from eslib.dispatcher import dispatcher, command, Dispatcher
 
 import json
 
+filter = []
+for i in ('name', 'transport_address', 'ip', 'host', 'version', 'roles'):
+    filter.append('nodes.*.%s' % i)
+default_filter_path = ','.join(filter)
 
-@dispatcher(object_name="node")
+
+@dispatcher(object_name="node", default_filter_path='nodes.*.name')
 class NodesDispatcher(Dispatcher):
 
     def fill_parser(self, parser):
         parser.add_option("-n", "--node", dest="node_name", help="nodes filter")
-        parser.add_option("-l", "--locale", dest="local_node", help="Command runs on local node", default=False, action='store_true')
 
-    @coroutine
-    def check_noun_args(self, running, local_node=False, node_name=''):
-        if local_node:
-            node_name = '_all'
+    def check_noun_args(self, running, node_name=None, **kwargs):
         running.node_name = node_name
+        return super().check_noun_args(running, node_name=node_name, **kwargs)
 
     @coroutine
-    def get(self, running):
-        if running.node_name is None or len(running.node_name) == 0:
-            node_name = '_all'
-        else:
-            node_name = running.node_name
-        nodes = yield from self.api.escnx.nodes.info(node_name, metric=running.metrics)
+    def get(self, running, node_name='_all', local_node=None, filter_path=None):
+        nodes = yield from self.api.escnx.nodes.info(node_name, filter_path=filter_path)
         return nodes['nodes']
 
 
@@ -33,14 +31,11 @@ class NodesDispatcher(Dispatcher):
 class NodesList(List):
 
     @coroutine
-    def check_verb_args(self, running, *args, **kwargs):
-        running.metrics = 'host'
-        yield from super().check_verb_args(running, *args, **kwargs)
+    def action(self, element, running, filter_path=None, **kwargs):
+        return super().action(element, running, filter_path=default_filter_path, **kwargs)
 
     def to_str(self, running, item):
-        value = item[1]
-        if 'attributes' in value: value.pop('attributes')
-        if 'build_hash' in value: value.pop('build_hash')
+        value = list(item[1].values())[0]
         name = value.pop('name')
         return "%s %s" % (name, value)
 
@@ -51,10 +46,9 @@ class NodesDump(DumpVerb):
     def fill_parser(self, parser):
         super().fill_parser(parser)
 
-    @coroutine
     def check_verb_args(self, running, *args, **kwargs):
         running.metrics = None
-        yield from super().check_verb_args(running, *args, **kwargs)
+        return super().check_verb_args(running, *args, **kwargs)
 
 
 @command(NodesDispatcher, verb='stats')
@@ -64,18 +58,9 @@ class NodesStats(DumpVerb):
         super().fill_parser(parser)
         parser.add_option("-m", "--metric", dest="metrics", default=[], action='append')
 
-    @coroutine
     def check_verb_args(self, running, *args, metrics=[], **kwargs):
         running.metrics = ','.join(metrics)
-        yield from super().check_verb_args(running, *args, **kwargs)
-
-    @coroutine
-    def get(self, running):
-        val = yield from self.api.escnx.nodes.info(node_id=running.node_name, metric='settings')
-        nodes = {}
-        for k,v in val['nodes'].items():
-            nodes[k] = v['name']
-        return nodes
+        return super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
     def action(self, element, running, *args, only_keys=False, **kwargs):
@@ -91,13 +76,10 @@ class NodesStats(DumpVerb):
 class NodesCat(CatVerb):
 
     def fill_parser(self, parser):
-        super(NodesCat, self).fill_parser(parser)
+        super().fill_parser(parser)
+        parser.add_option("-b", "--bytes", dest="bytes", default=False, action='store_true')
+        parser.add_option("--full_id", dest="full_id", default=False, action='store_true')
         parser.add_option("-l", "--local", dest="local", default=False, action='store_true')
-
-    @coroutine
-    def check_verb_args(self, running, *args, local=False, **kwargs):
-        running.local = local
-        yield from super().check_verb_args(running, *args, **kwargs)
 
     def get_source(self):
         return self.api.escnx.cat.nodes
