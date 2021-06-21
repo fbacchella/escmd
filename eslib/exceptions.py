@@ -132,13 +132,15 @@ class ESLibPyCurlError(ESLibError):
 
 
 def _get_notfound_error(ex):
-    if not ex.info.get('elasticerror', True):
+    # same kind of exception returned for internal Elastic errors or pure HTTP error
+    # The only difference is the type of ex.info.error: dict for internal Elastic errors or str
+    if 'error' in ex.info and isinstance(ex.info['error'], dict):
+        return ESLibNotFoundError(ex)
+    else:
         url = None
         if len(ex.args) >= 4:
             url = ex.args[3]
         return ESLibHttpNotFoundError(ex, url=url)
-    else:
-        return ESLibNotFoundError(ex)
 
 
 def _get_transport_error(e):
