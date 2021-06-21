@@ -32,10 +32,12 @@ class NodesList(List):
 
     @coroutine
     def action(self, element, running, filter_path=None, **kwargs):
-        return super().action(element, running, filter_path=default_filter_path, **kwargs)
+        infos = yield from self.api.escnx.nodes.info(element[0], human=True, filter_path=['nodes.*.name', 'nodes.*.version',
+                                                                                          'nodes.*.transport_address', 'nodes.*.roles'])
+        return infos
 
     def to_str(self, running, item):
-        value = list(item[1].values())[0]
+        value = list(item[1]['nodes'].items())[0][1]
         name = value.pop('name')
         return "%s %s" % (name, value)
 
