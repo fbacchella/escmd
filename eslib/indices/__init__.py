@@ -141,6 +141,7 @@ class IndiciesReindex(RepeterVerb):
             running.template_name = template_name
             running.keep_mapping = False
         else:
+            running.template_name = None
             running.keep_mapping = keep_mapping
 
         if infix_regex is not None:
@@ -155,7 +156,6 @@ class IndiciesReindex(RepeterVerb):
     def action(self, element, running):
         if running.template_name is not None:
             templates = yield from self.api.escnx.indices.get_template(name=running.template_name)
-            running.keep_mapping = False
             if running.template_name in templates:
                 template = templates[running.template_name]
                 settings = template['settings']
