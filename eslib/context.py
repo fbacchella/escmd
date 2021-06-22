@@ -97,8 +97,6 @@ class Context(object):
                 except OSError as e:
                     raise ConfigurationError("Can't read configuration file '" + config_file + "': " + str(e))
 
-            #print(config.read(config_file, encoding='utf-8'))
-
         # Prepare the configuration with default settings
         self.current_config = copy.deepcopy(Context.default_settings)
 

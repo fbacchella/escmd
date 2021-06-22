@@ -9,7 +9,6 @@ class NodeTestCase(tests.TestCaseProvider):
         dispatcher = eslib.dispatchers['node']()
         dispatcher.api = self.ctx
         running = self._run_action(dispatcher, 'dump')
-        print(running.object)
         self.assertIsInstance(running.object, dict)
         self.assertEqual(len(running.object), 1)
         for n, data in running.object.items():
