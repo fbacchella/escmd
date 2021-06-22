@@ -145,8 +145,8 @@ class DumpVerb(RepeterVerb):
         return super().check_verb_args(running, pretty=pretty, **kwargs)
 
     @coroutine
-    def get(self, running, **kwargs):
-        val = yield from self.dispatcher.get(running, **kwargs)
+    def get(self, running, filter_path=None, **kwargs):
+        val = yield from self.dispatcher.get(running, filter_path=None, **kwargs)
         return val
 
     @coroutine
