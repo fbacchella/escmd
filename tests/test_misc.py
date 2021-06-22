@@ -12,7 +12,7 @@ class MiscTestCase(tests.TestCaseProvider):
         self.assertTrue('task' in eslib.dispatchers)
         self.assertTrue('template' in eslib.dispatchers)
         self.assertTrue('plugin' in eslib.dispatchers)
-        self.assertTrue('shards' in eslib.dispatchers)
+        self.assertTrue('shard' in eslib.dispatchers)
 
     def test_verb_instance(self):
         for dispatch_class in eslib.dispatchers.values():
