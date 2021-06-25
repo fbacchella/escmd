@@ -58,13 +58,9 @@ class UpdateDict(dict):
                 self[k] = other[k]
         super(UpdateDict, self).update(kwargs)
 
+usage_common = "usage: %prog [options] object [object_args] verb [verbs_args]"
 
-def main():
-    default_config = None
-    if 'ESCONFIG' in os.environ:
-        default_config = os.environ['ESCONFIG']
-
-    usage_common = "usage: %prog [options] object [object_args] verb [verbs_args]"
+def get_parser(default_config=None):
     #The first level parser
     parser = optparse.OptionParser(usage="%s\nobjects are:\n    %s" % (usage_common, "\n    ".join(list(eslib.dispatchers.keys()))))
     parser.disable_interspersed_args()
@@ -75,11 +71,18 @@ def main():
     parser.add_option("-k", "--kerberos", dest="kerberos", help="Uses kerberos authentication", action='store_true')
     parser.add_option("-U", "--url", dest="url", help="URL to connect to", default=None)
     parser.add_option("-t", "--timeout", dest="timeout", help="Connection timeout", default=None, type=int)
+    return parser
 
-    (options, args) = parser.parse_args()
+
+def main():
+    default_config = None
+    if 'ESCONFIG' in os.environ:
+        default_config = os.environ['ESCONFIG']
+
+    (options, args) = get_parser().parse_args(default_config)
 
     #Extract the context options from the first level arguments
-    context_args = {k: v for k, v in list(vars(options).items()) if v is not None}
+    context_args = {k: v for k, v in vars(options).items() if v is not None}
     try:
         context = Context(**context_args)
     except ConfigurationError as e:

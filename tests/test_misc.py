@@ -1,6 +1,8 @@
 import optparse
 import eslib
 import tests
+from eslib.escmd import get_parser
+from eslib.context import Context
 
 
 class MiscTestCase(tests.TestCaseProvider):
@@ -71,3 +73,24 @@ class MiscTestCase(tests.TestCaseProvider):
             for i in running.object:
                 pass
 
+
+    def test_default_parser_args(self):
+        parser = get_parser()
+        kwargs={}
+        arg_options = dict(Context.arg_options)
+        for o in parser.option_list:
+            if o.dest is None or o.dest == 'config_file':
+                continue
+            else:
+                self.assertTrue(o.dest in Context.arg_options)
+                path = arg_options.pop(o.dest)
+                default = Context.default_settings[path[0]][path[1]]
+                kwargs[o.dest] = default
+        ctx = Context(**kwargs)
+        # Some interal Context args that are not reachable from command line
+        arg_options.pop('transport_class')
+        arg_options.pop('connection_class')
+        arg_options.pop('sniff')
+        self.assertEqual(0, len(arg_options))
+        self.assertTrue(ctx.connect())
+        self.assertTrue(ctx.connect())
