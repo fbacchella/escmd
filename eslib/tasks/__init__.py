@@ -84,6 +84,22 @@ class TasksTree(Verb):
                 elif parent is not None:
                     next_try_parent[node] = parent
             if len(try_parent) == len(next_try_parent):
+                nodes = {}
+                actions = {}
+
+                max_running_time_in_nanos = 0
+                for task_index in try_parent.keys():
+                    task_info = task_infos[task_index]
+                    max_running_time_in_nanos = max(int(task_info.get('running_time_in_nanos', -1)), max_running_time_in_nanos)
+                    node_name = task_info['node_name']
+                    action = task_info['action']
+                    nodes[node_name] = nodes.get(node_name, 0) + 1
+                    actions[action] = actions.get(action, 0) + 1
+
+                max_running_time = datetime.timedelta(seconds=int(max_running_time_in_nanos / 1e9))
+                print('Orphaned tasks by node: ', nodes)
+                print('Orphaned tasks by action: ', actions)
+                print('Oldest orphaned task: ', max_running_time)
                 break
             try_parent = next_try_parent
         return tree
