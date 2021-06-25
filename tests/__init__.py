@@ -8,7 +8,7 @@ class TestCaseProvider(unittest.TestCase):
     def setUp(self):
         transport_class=AsyncTransport
         connection_class=PyCurlConnection
-        self.ctx = context.Context(url='localhost:9200', sniff=False, debug=False, transport_class=transport_class, connection_class=connection_class)
+        self.ctx = context.Context(url='localhost:9200', sniff=False, debug=False, transport_class=transport_class, connection_class=connection_class, typehandling='transition')
         self.ctx.connect()
         for i in self.ctx.perform_query(self.ctx.escnx.indices.create(id(self))):
             pass

@@ -1,6 +1,5 @@
 import eslib
 
-import json
 import tests
 import os
 from pathlib import Path
@@ -26,7 +25,7 @@ class TemplateTestCase(tests.TestCaseProvider):
         template_path = current_path / "resources" / "template.yaml"
         dispatcher = eslib.dispatchers['template']()
         dispatcher.api = self.ctx
-        running = self._run_action(dispatcher, 'put', object_options={'template_name': 'logs'}, object_args=['-f', str(template_path), '-p', 'logs-*', '-t'])
+        running = self._run_action(dispatcher, 'put', object_options={'template_name': 'logs'}, object_args=['-f', str(template_path), '-p', 'logs-*'])
         print(vars(running))
         running = self._run_action(dispatcher, 'delete', object_options={'template_name': 'logs'})
         print(vars(running))
