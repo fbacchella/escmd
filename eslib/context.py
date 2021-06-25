@@ -2,7 +2,6 @@ from configparser import ConfigParser
 from elasticsearch import Elasticsearch
 from eslib.asynctransport import AsyncTransport
 from eslib.exceptions import resolve_exception
-from elasticsearch.exceptions import TransportError
 from asyncio import new_event_loop, ensure_future, wait, FIRST_COMPLETED
 import copy
 import urllib.parse
@@ -114,11 +113,11 @@ class Context(object):
 
         config = ConfigParser()
         if config_file is not None:
-                try:
-                    with open(config_file, mode='rt', encoding='utf-8') as f:
-                        config.read_file(f)
-                except OSError as e:
-                    raise ConfigurationError("Can't read configuration file '" + config_file + "': " + str(e))
+            try:
+                with open(config_file, mode='rt', encoding='utf-8') as f:
+                    config.read_file(f)
+            except OSError as e:
+                raise ConfigurationError("Can't read configuration file '" + config_file + "': " + str(e))
 
         # Prepare the configuration with default settings
         self.current_config = copy.deepcopy(Context.default_settings)
