@@ -504,7 +504,7 @@ class PyCurlConnection(Connection):
 
         return handle
 
-    def perform_request(self, method, url, params=None, body=None, headers={}, ignore=(), future=None):
+    def perform_request(self, method, url, params=None, body=None, headers={}, ignore=(), future=None, timeout=None):
         url = self.url_prefix + url
         if params is not None:
             url = '%s?%s' % (url, urlencode(params))
@@ -514,6 +514,9 @@ class PyCurlConnection(Connection):
 
         if method == 'HEAD':
             curl_handle.setopt(pycurl.NOBODY, True)
+
+        if timeout is not None:
+            curl_handle.setopt(pycurl.TIMEOUT, timeout)
 
         # Prepare the headers callback
         curl_handle.headers = {}
