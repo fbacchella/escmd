@@ -71,6 +71,7 @@ def get_parser(default_config=None):
     parser.add_option("-k", "--kerberos", dest="kerberos", help="Uses kerberos authentication", action='store_true')
     parser.add_option("-U", "--url", dest="url", help="URL to connect to", default=None)
     parser.add_option("-t", "--timeout", dest="timeout", help="Connection timeout", default=None, type=int)
+    parser.add_option("-T", "--typehandling", dest="typehandling", help="Define how to handle type", default=None)
     return parser
 
 

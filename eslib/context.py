@@ -6,6 +6,26 @@ from elasticsearch.exceptions import TransportError
 from asyncio import new_event_loop, ensure_future, wait, FIRST_COMPLETED
 import copy
 import urllib.parse
+from enum import Enum
+
+
+class TypeHandling(Enum):
+    WITHTYPE = 'withtype'
+    TRANSITION = 'transition'
+    DEPRECATED = 'deprecated'
+
+
+types_handling = {}
+for th in TypeHandling:
+    types_handling[th.value[0]] = th
+
+def type_handling_resolver(value):
+    str_value = str(value).lower()
+    try_th = types_handling.get(str_value[0], None)
+    if try_th is not None and len(str_value) <= len(try_th.value) and str_value == try_th.value[0:len(str_value)]:
+        return try_th
+    else:
+        raise ConfigurationError('Invalid type handling: "%s"' % value)
 
 class ConfigurationError(Exception):
     def __init__(self, value):
@@ -32,7 +52,9 @@ class Context(object):
                    'transport_class': ['api', 'transport_class'],
                    'connection_class': ['api', 'connection_class'],
                    'sniff': ['api', 'sniff'],
-                   'timeout': ['api', 'timeout']}
+                   'timeout': ['api', 'timeout'],
+                   'typehandling': ['api', 'type_handling'],
+                   }
 
     # default values for connection
     default_settings = {
@@ -51,6 +73,7 @@ class Context(object):
             'transport_class': AsyncTransport,
             'connection_class': None,
             'http_version': None,
+            'type_handling': TypeHandling.WITHTYPE.name,
         },
         'logging': {
             'filters': 'header,data,text',
@@ -177,6 +200,8 @@ class Context(object):
                 self.current_config['ssl']['cert_type'] = 'PEM'
             if self.current_config['ssl'].get('key_file', None) is not None and self.current_config['ssl'].get('key_type', None) is None:
                 self.current_config['ssl']['key_type'] = 'PEM'
+
+        self.type_handling = type_handling_resolver(self.current_config['api']['type_handling'])
 
     def check_pycurl(self, libcurl_path=None, pycurl_path=None):
         # Some distributions provides really old curl and pycurl

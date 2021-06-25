@@ -1,10 +1,11 @@
 from eslib.verb import Verb, List, DumpVerb, RepeterVerb, CatVerb
+from eslib.dispatcher import dispatcher, command, Dispatcher
+from eslib.context import TypeHandling
 from yaml import load
 try:
     from yaml import CLoader as Loader, CDumper as Dumper
 except ImportError:
     from yaml import Loader, Dumper
-from eslib.dispatcher import dispatcher, command, Dispatcher
 from asyncio import coroutine
 
 
@@ -46,12 +47,18 @@ class TemplatesDump(DumpVerb):
 class TemplatesPut(Verb):
 
     def fill_parser(self, parser):
+        super().fill_parser(parser)
         parser.add_option("-f", "--template_file", dest="template_file_name", default=None)
         parser.add_option("-p", "--template_pattern", dest="template_pattern", default=[], action='append')
+        parser.add_option("-t", "--withouttype", dest="with_type", default=True, action='store_false')
 
-    def check_verb_args(self, running, *args, template_file_name=None, template_pattern=None, **kwargs):
+    def check_verb_args(self, running, *args, template_file_name=None, template_pattern=None, with_type, **kwargs):
+        if running.template_name is None:
+            raise Exception("-n/--name mandatory is not defined")
         with open(template_file_name, "r") as template_file:
             running.template = load(template_file, Loader=Loader)
+        if with_type and self.api.type_handling in (TypeHandling.DEPRECATED, TypeHandling.TRANSITION) and 'mappings' in running.template:
+            running.template['mappings'] = list(running.template['mappings'].values())[0]
         if template_pattern is not None and len(template_pattern) > 0:
             running.template['index_patterns'] = template_pattern
             if 'template' in running.template:
@@ -64,7 +71,11 @@ class TemplatesPut(Verb):
 
     @coroutine
     def execute(self, running):
-        val = yield from self.api.escnx.indices.put_template(name=running.template_name, body=running.template)
+        if self.api.type_handling == TypeHandling.TRANSITION:
+            include_type_name = False
+        else:
+            include_type_name = None
+        val = yield from self.api.escnx.indices.put_template(name=running.template_name, body=running.template, include_type_name=include_type_name)
         return val
 
     def to_str(self, running, value):
