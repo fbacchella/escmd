@@ -348,7 +348,7 @@ http_versions = {
     '0.9': None,
     '1.0': pycurl.CURL_HTTP_VERSION_1_0,
     '1.1': pycurl.CURL_HTTP_VERSION_1_1,
-    '2':   pycurl.CURL_HTTP_VERSION_2,
+    '2':   3 # pycurl.CURL_HTTP_VERSION_2
 }
 
 
