@@ -93,4 +93,8 @@ class MiscTestCase(tests.TestCaseProvider):
         arg_options.pop('sniff')
         self.assertEqual(0, len(arg_options))
         self.assertTrue(ctx.connect())
+
+
+    def test_empty_context(self):
+        ctx = Context()
         self.assertTrue(ctx.connect())

@@ -37,7 +37,7 @@ class Context(object):
     # default values for connection
     default_settings = {
         'api': {
-            'url': None,
+            'url': 'http://localhost:9200',
             'sniff': True,
             'username': None,
             'password': None,
