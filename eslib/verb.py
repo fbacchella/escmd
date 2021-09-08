@@ -1,5 +1,6 @@
 import optparse
 import json
+from yaml import load
 import collections
 import re
 from asyncio import coroutine
@@ -323,13 +324,15 @@ class WriteSettings(RepeterVerb):
         values = {}
         if settings_file_name is not None:
             with open(settings_file_name, "r") as settings_file:
-                values = json.load(settings_file)
+                values = load(settings_file)
+                if 'settings' in values:
+                    values = values['settings']
+        failed = False
         for i in args:
             try:
                 k, v = next(iter(WriteSettings.keyvalue_re.finditer(i))).groups()
                 if v == 'null':
                     v = None
-                failed = False
                 self._dict_merge(values, self._path_to_dict(k, v))
             except StopIteration:
                 failed = True
