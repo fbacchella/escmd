@@ -9,7 +9,7 @@ from enum import Enum
 
 
 class TypeHandling(Enum):
-    WITHTYPE = 'withtype'
+    IMPLICIT = 'implicit'
     TRANSITION = 'transition'
     DEPRECATED = 'deprecated'
 
@@ -73,7 +73,7 @@ class Context(object):
             'transport_class': AsyncTransport,
             'connection_class': None,
             'http_version': None,
-            'type_handling': TypeHandling.WITHTYPE.name,
+            'type_handling': TypeHandling.IMPLICIT.name,
         },
         'logging': {
             'filters': 'header,data,text',
