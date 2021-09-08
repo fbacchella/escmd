@@ -116,7 +116,12 @@ class IndiciesDelete(RepeterVerb):
 
 @command(IndicesDispatcher, verb='reindex')
 class IndiciesReindex(RepeterVerb):
-
+    """
+    Used to reindex indices.
+    To reindex everything for a give indices prefix, one can use:
+    ./escmd -c sg.ini -U https://localhost index -n "$PREFIX-*,<-$PREFIX-{now/d}>" reindex -s $NEXT -i '(.*?)[a-z]?$' -c 'best_compression'
+    where $PREFIX is the prefix for reindexed indices and $NEXT is a one letter suffix incremented with each reindexation
+    """
     def fill_parser(self, parser):
         parser.add_option("-t", "--use_template", dest="template_name", help="Template to use for reindexing", default=None)
         parser.add_option("-p", "--prefix", dest="prefix", default='')
@@ -124,6 +129,9 @@ class IndiciesReindex(RepeterVerb):
         parser.add_option("-s", "--suffix", dest="suffix", default='')
         parser.add_option("-i", "--infix_regex", dest="infix_regex", default=None)
         parser.add_option("-c", "--codec", dest="codec", default=None)
+
+    def check_noun_args(self, running, **kwargs):
+        return super().check_noun_args(running, filter_path='*.settings.index.lifecycle,*.settings.index.uuid,*.aliases', **kwargs)
 
     def check_verb_args(self, running, *args, template_name=None, infix_regex=None, prefix='', suffix='', keep_mapping=False,
                         codec=None,
@@ -169,8 +177,7 @@ class IndiciesReindex(RepeterVerb):
                 raise ESLibError('No matching template found')
 
         index_name = element[0]
-        index_data = yield from self.api.escnx.indices.get(index_name)
-        index = list(index_data.values())[0]
+        index_data = element[1]
         if running.infix_regex is not None:
             match = running.infix_regex.match(index_name)
             if match is not None and len(match.groups()) >= 1:
@@ -184,15 +191,17 @@ class IndiciesReindex(RepeterVerb):
         if v:
             raise ESLibError('%s already exists' % new_index_name)
 
-        if running.mappings is None and running.keep_mapping:
-            mappings = index['mappings']
-            settings = index['settings']
+        if running.keep_mapping:
+            index = yield from self.api.escnx.indices.get(index_name, filter_path='*.mappings')
+            for i in index.items():
+                mappings = i[1]['mappings']
+            settings = {'index': {}}
         elif running.mappings is not None:
             mappings = running.mappings
             settings = dict(running.settings)
         else:
-            settings = {'index': {}}
             mappings = {}
+            settings = {'index': {}}
         for k in 'creation_date', 'uuid', 'provided_name', 'version':
             if k in settings.get('index', {}):
                 del settings.get('index')[k]
@@ -200,6 +209,19 @@ class IndiciesReindex(RepeterVerb):
         new_index_settings = settings
         if running.codec:
             new_index_settings['index']['codec'] = running.codec
+
+        # if lifecycle managed, extract informations for later processing
+        if 'lifecycle' in index_data['settings']['index']:
+            lifecycle = index_data['settings']['index']['lifecycle']
+            del index_data['settings']['index']['lifecycle']
+        else:
+            lifecycle = None
+
+        for i in (yield from self.api.escnx.ilm.explain_lifecycle(index_name)).values():
+            ilm = [x for x in i.values()][0]
+            if ilm['managed'] and ilm['action'] != 'complete':
+                raise ESLibError('%s currently in life cycle processing' % index_name)
+
         # Create the index
         yield from self.api.escnx.indices.create(index=new_index_name, body={'settings': new_index_settings, "mappings": mappings})
 
@@ -211,10 +233,30 @@ class IndiciesReindex(RepeterVerb):
         # Ensure the minimum segments
         yield from self.api.escnx.indices.forcemerge(new_index_name, max_num_segments=1, flush=True)
 
+        if lifecycle is not None:
+            yield from self.api.escnx.indices.put_settings(index=new_index_name, body={'index': {'lifecycle': lifecycle}})
+
+        if ilm['managed']:
+            for i in (yield from self.api.escnx.ilm.explain_lifecycle(new_index_name)).values():
+                ilm_new = [x for x in i.values()][0]
+            new_step_command = {
+                "current_step": {
+                    "phase": ilm_new['phase'],
+                    "action": "complete",
+                    "name": "complete"
+                },
+                "next_step": {
+                    "phase": ilm['phase'],
+                    "action": "complete",
+                    "name": "complete"
+                }
+            }
+            self.api.escnx.ilm.move_to_step(new_index_name, new_step_command)
+
         # Only delete if not failure
         if len(reindex_status['failures']) == 0:
             # Moving aliases
-            aliases = index['aliases']
+            aliases = index_data['aliases']
             aliases_actions = []
             if len(aliases) > 0:
                 for a in aliases:
