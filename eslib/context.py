@@ -40,7 +40,7 @@ class Context(object):
     boolean_options = {'api': frozenset(['debug', 'kerberos', 'sniff']), 'logging': {}, 'kerberos': {}, 'ssl': frozenset(['verify_certs']), 'pycurl': {}}
 
     # The settings that store integer values
-    integer_options = {'api': frozenset(['timeout', 'max_active']), 'logging': {}, 'kerberos': {}, 'ssl': {}, 'pycurl': {}}
+    integer_options = {'api': frozenset(['timeout', 'maxactive']), 'logging': {}, 'kerberos': {}, 'ssl': {}, 'pycurl': {}}
 
     # mapping from command line options to configuration options:
     arg_options = {'debug': ['api', 'debug'],
@@ -53,6 +53,7 @@ class Context(object):
                    'sniff': ['api', 'sniff'],
                    'timeout': ['api', 'timeout'],
                    'typehandling': ['api', 'type_handling'],
+                   'maxactive': ['api', 'maxactive'],
                    }
 
     # default values for connection
@@ -67,7 +68,7 @@ class Context(object):
             'debug': False,
             'log': None,
             'user_agent': 'eslib/pycurl',
-            'max_active': 10,
+            'maxactive': 10,
             'timeout': 10,
             'transport_class': AsyncTransport,
             'connection_class': None,
@@ -224,7 +225,7 @@ class Context(object):
             from eslib.pycurlconnection import PyCurlMultiHander
 
             self.loop = new_event_loop()
-            self.multi_handle = PyCurlMultiHander(self.current_config['api']['max_active'], loop=self.loop)
+            self.multi_handle = PyCurlMultiHander(self.current_config['api']['maxactive'], loop=self.loop)
             self.curl_perform_task = None
 
         cnxprops={'multi_handle': self.multi_handle,

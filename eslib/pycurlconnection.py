@@ -227,7 +227,7 @@ def get_curl_debug(debug_filter, logger):
 
 class PyCurlMultiHander(object):
 
-    def __init__(self, max_query=10, loop=get_event_loop()):
+    def __init__(self, maxactive=10, loop=get_event_loop()):
         self.loop = loop
         self.multi = pycurl.CurlMulti()
         self.share = pycurl.CurlShare()
@@ -240,7 +240,7 @@ class PyCurlMultiHander(object):
         self.handles = set()
         self.waiting_handles = Queue(loop=self.loop)
         self.running = True
-        self.max_active = max_query
+        self.maxactive = maxactive
 
     def query(self, handle, future):
         def manage_callback(status, headers, data):
@@ -272,7 +272,7 @@ class PyCurlMultiHander(object):
 
     def _try_load_queries(self, wait=True, timeout=1.0):
         added = 0
-        while len(self.handles) < self.max_active:
+        while len(self.handles) < self.maxactive:
             try:
                 if wait:
                     handler = yield from wait_for(self.waiting_handles.get(), timeout, loop=self.loop)
