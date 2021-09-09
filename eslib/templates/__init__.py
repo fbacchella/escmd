@@ -57,13 +57,13 @@ class TemplatesPut(Verb):
             raise Exception("-n/--name mandatory is not defined")
         with open(template_file_name, "r") as template_file:
             running.template = load(template_file, Loader=Loader)
-        if type_name is not None and self.api.type_handling == TypeHandling.DEPRECATED:
+        if type_name is not None and self.api.type_handling == TypeHandling.DEPRECATED and 'mappings' in running.template and type_name in running.template['mappings']:
             # Removing an explicit give type from the mapping
             running.template['mappings'] = running.template['mappings'][type_name]
             running.with_type = None
         elif type_name is not None and self.api.type_handling == TypeHandling.TRANSITION:
             # Given a type_name, used to detect is type is present or not
-            running.with_type = type_name in running.template['mappings']
+            running.with_type = 'mappings' in running and type_name in running.template['mappings']
         elif type_name is not None and self.api.type_handling == TypeHandling.IMPLICIT:
             raise Exception("implicit type handling don't accept type_name argument")
         else:
