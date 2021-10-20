@@ -63,7 +63,7 @@ class TemplatesPut(Verb):
             running.with_type = None
         elif type_name is not None and self.api.type_handling == TypeHandling.TRANSITION:
             # Given a type_name, used to detect is type is present or not
-            running.with_type = 'mappings' in running and type_name in running.template['mappings']
+            running.with_type = 'mappings' in running.template and type_name in running.template['mappings']
         elif type_name is not None and self.api.type_handling == TypeHandling.IMPLICIT:
             raise Exception("implicit type handling don't accept type_name argument")
         else:
