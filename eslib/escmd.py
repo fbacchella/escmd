@@ -81,7 +81,7 @@ def main():
     if 'ESCONFIG' in os.environ:
         default_config = os.environ['ESCONFIG']
 
-    (options, args) = get_parser().parse_args(default_config)
+    (options, args) = get_parser(default_config).parse_args()
 
     #Extract the context options from the first level arguments
     context_args = {k: v for k, v in vars(options).items() if v is not None}
