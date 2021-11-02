@@ -487,3 +487,37 @@ class IndicesStats(DumpVerb):
             #value = {k.replace('index.', ''): v for k, v in index_data['defaults'].items()}
         else:
             return dumps(value[1])
+
+
+@command(IndicesDispatcher, verb='explain_lifecycle')
+class IndicesExplainLifecycl(DumpVerb):
+
+    def fill_parser(self, parser):
+        super().fill_parser(parser)
+        parser.add_option("-e", "--only_errors", dest="only_errors", help="filters the indices included in the response to ones in an ILM error state, implies only_managed", default=None, action='store_true')
+        parser.add_option("-m", "--only_managed", dest="only_managed", help="filters the indices included in the response to ones managed by ILM", default=None, action='store_true')
+
+    def check_verb_args(self, running, *args, only_errors=None, only_managed=None, **kwargs):
+        running.only_errors = only_errors
+        running.only_managed = only_managed
+        return super().check_verb_args(running, *args, **kwargs)
+
+    @coroutine
+    def action(self, element, running, *args, only_keys=False, **kwargs):
+        val = yield from self.api.escnx.ilm.explain_lifecycle(element[0], only_errors=running.only_errors, only_managed=running.only_managed)
+        return val
+
+    def to_str(self, running, value):
+        return dumps(value[1])
+
+
+@command(IndicesDispatcher, verb='retry_policy')
+class IndicesExplainLifecycl(RepeterVerb):
+
+    @coroutine
+    def action(self, element, running, *args, only_keys=False, **kwargs):
+        val = yield from self.api.escnx.ilm.retry(element[0])
+        return val
+
+    def to_str(self, running, value):
+        return dumps(value[1])

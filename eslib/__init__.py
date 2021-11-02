@@ -53,3 +53,4 @@ import eslib.documents
 import eslib.shards
 import eslib.plugins
 import eslib.xpack
+import eslib.policies

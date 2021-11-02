@@ -189,3 +189,19 @@ class ClusterWriteSettings(WriteSettings):
 
     def format(self, running, name, result):
         return None
+
+
+@command(ClusterDispatcher, verb='ilm_status')
+class ClusterHealth(DumpVerb):
+
+    @coroutine
+    def get(self, running, **kwargs):
+        return {}
+
+    @coroutine
+    def execute(self, running, **kwargs):
+        val = yield from self.api.escnx.ilm.get_status()
+        return val
+
+    def to_str(self, running, item):
+        return item['operation_mode']
