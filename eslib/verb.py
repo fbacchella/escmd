@@ -147,7 +147,7 @@ class DumpVerb(RepeterVerb):
 
     @coroutine
     def get(self, running, filter_path=None, **kwargs):
-        val = yield from self.dispatcher.get(running, filter_path=None, **kwargs)
+        val = yield from self.dispatcher.get(running, filter_path=filter_path, **kwargs)
         return val
 
     @coroutine
