@@ -425,6 +425,8 @@ class PyCurlConnection(Connection):
             self.http_version = None
 
     def _get_curl_handler(self, headers):
+        # elasticsearch lib send full lower-case headers
+        headers = dict(map(lambda x: (x[0].title(),x[1]), headers.items()))
         handle = pycurl.Curl()
 
         settings = {

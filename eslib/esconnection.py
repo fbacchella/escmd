@@ -19,8 +19,8 @@ class CurlDebugType(IntEnum):
 def decode_body(handler, headers, body):
     encoding = 'UTF-8'
     content_type = None
-    if 'content-type' in headers:
-        content_type_header = headers['content-type']
+    if 'Content-Type' in headers:
+        content_type_header = headers['Content-Type']
     else:
         try:
             content_type_header = handler.get_info(pycurl.CONTENT_TYPE)

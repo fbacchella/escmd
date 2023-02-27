@@ -100,7 +100,7 @@ class AsyncTransport(Transport):
                 else:
                     try:
                         if data:
-                            data = self.deserializer.loads(data, headers_out.get('content-type'))
+                            data = self.deserializer.loads(data, headers_out.get('Content-Type'))
                         future.set_result(data)
                     except Exception as e:
                         future.set_exception(e)
