@@ -106,7 +106,7 @@ class AsyncTransport(Transport):
                         future.set_exception(e)
                 break
 
-    def perform_request(self, method, url, headers=None, params=None, body=None):
+    async def perform_request(self, method, url, headers=None, params=None, body=None):
         futur_result = Future(loop=self.loop)
         query_iterator = self.perform_async_request(futur_result, method, url, headers, params, body)
         (connection,
@@ -119,7 +119,7 @@ class AsyncTransport(Transport):
          timeout) = query_iterator.send(None)
         while True:
             curl_future = Future(loop=self.loop)
-            yield from connection.perform_request(method, next_url, next_params, next_body,
+            await connection.perform_request(method, next_url, next_params, next_body,
                                                        headers=next_headers,
                                                        ignore=ignore, future=curl_future)
             try:

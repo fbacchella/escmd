@@ -45,9 +45,7 @@ def print_run_phrase(dispatcher, verb, object_options={}, object_args=[]):
     query = dispatcher.run_phrase(verb, object_options, object_args)
     running = dispatcher.api.perform_query(query)
     if running is not None:
-        cmd = running.cmd
-        result = running.result
-        filter_result(cmd, running, result)
+        filter_result(running.cmd, running, running.result)
 
 
 # needed because dict.update is using shortcuts and don't works on subclass of dict

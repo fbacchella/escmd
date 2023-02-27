@@ -63,7 +63,7 @@ class Dispatcher(object):
         return {k: v for k, v in list(vars(options).items())
                         if v is not None and (isinstance(v, str) or not hasattr(v, '__len__') or len(v) != 0)}
 
-    def run_phrase(self, verb, object_options={}, object_args=[]):
+    async def run_phrase(self, verb, object_options={}, object_args=[]):
         cmd = self.get_cmd(verb)
         running = Running(cmd)
         if cmd is None:
@@ -75,8 +75,8 @@ class Dispatcher(object):
         verb_options = self.clean_options(verb_options)
         nounargs = cmd.check_noun_args(running, **object_options)
         verbargs = cmd.check_verb_args(running, *verb_args, **verb_options)
-        running.object = yield from cmd.get(running, **nounargs)
-        running.result = yield from cmd.execute(running, **verbargs)
+        running.object = await cmd.get(running, **nounargs)
+        running.result = await cmd.execute(running, **verbargs)
         return running
 
 

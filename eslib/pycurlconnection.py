@@ -242,7 +242,7 @@ class PyCurlMultiHander(object):
         self.running = True
         self.maxactive = maxactive
 
-    def query(self, handle, future):
+    async def query(self, handle, future):
         def manage_callback(status, headers, data):
             handle.close()
             future.set_result((status, headers, data))
@@ -256,7 +256,7 @@ class PyCurlMultiHander(object):
 
         # put the query in the waiting queue, that launch it if possible
         # and wait for the processing to be finished
-        yield from wait((future,self.waiting_handles.put(handle)), loop=self.loop)
+        await wait((future,self.waiting_handles.put(handle)), loop=self.loop)
         return future
 
     def close(self):
@@ -270,12 +270,12 @@ class PyCurlMultiHander(object):
             ret, num_handles = self.multi.perform()
         return ret, num_handles
 
-    def _try_load_queries(self, wait=True, timeout=1.0):
+    async def _try_load_queries(self, wait=True, timeout=1.0):
         added = 0
         while len(self.handles) < self.maxactive:
             try:
                 if wait:
-                    handler = yield from wait_for(self.waiting_handles.get(), timeout, loop=self.loop)
+                    handler = await wait_for(self.waiting_handles.get(), timeout, loop=self.loop)
                 else:
                     handler = self.waiting_handles.get_nowait()
                 # only wait once
@@ -294,7 +294,7 @@ class PyCurlMultiHander(object):
             if ret > 0:
                 raise ConnectionError("pycurl failed", ret)
 
-    def perform(self, timeout=0.1):
+    async def perform(self, timeout=0.1):
         """
         Loop on waiting handles to process them until they are no more waiting one and all send are finished.
         It's never finished until closed for end of all processing, don't wait for it on loop
@@ -304,9 +304,9 @@ class PyCurlMultiHander(object):
         while self.running:
             if len(self.handles) == 0:
                 # no activity, just sleep, for new queries
-                yield from self._try_load_queries(True, timeout)
+                await self._try_load_queries(True, timeout)
             else:
-                yield from self._try_load_queries(False)
+                await self._try_load_queries(False)
             if len(self.handles) == 0:
                 continue
             # wait for something to happen

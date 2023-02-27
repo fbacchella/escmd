@@ -286,8 +286,8 @@ class Context(object):
             return True
 
     def perform_query(self, query):
-        def looper():
-            done, pending = yield from wait((query, self.curl_perform_task), loop=self.loop, return_when=FIRST_COMPLETED)
+        async def looper():
+            done, pending = await wait((query, self.curl_perform_task), loop=self.loop, return_when=FIRST_COMPLETED)
             return done, pending
 
         done, pending = self.loop.run_until_complete(looper())
