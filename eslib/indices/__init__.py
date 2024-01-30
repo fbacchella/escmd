@@ -1,5 +1,6 @@
 import json
 
+from eslib.context import TypeHandling
 from eslib.verb import Verb, DumpVerb, RepeterVerb, ReadSettings, WriteSettings, CatVerb, List
 from eslib.dispatcher import dispatcher, command, Dispatcher
 from eslib.exceptions import ESLibError
@@ -523,6 +524,57 @@ class IndicesExplainLifecycl(RepeterVerb):
 
     def to_str(self, running, value):
         return dumps(value[1])
+
+
+@command(IndicesDispatcher, verb='updatemapping')
+class IndicesUpdateMapping(RepeterVerb):
+
+    def fill_parser(self, parser):
+        super().fill_parser(parser)
+        parser.add_option("-t", "--template_file", dest="template_file_name", default=None)
+        parser.add_option("-m", "--mapping_file", dest="template_file_name", default=None)
+        parser.add_option("-d", "--doc_type", dest="doc_type", default=None)
+
+    def check_verb_args(self, running, *args, template_file_name=None, mapping_file=None, doc_type=None, **kwargs):
+        if template_file_name is not None:
+            with open(template_file_name, "r") as template_file:
+                template = load(template_file, Loader=Loader)
+            if doc_type is not None and self.api.type_handling == TypeHandling.DEPRECATED and 'mappings' in template and doc_type in template['mappings']:
+                # Removing an explicit give type from the mapping
+                running.mappings = template['mappings'][doc_type]
+                running.with_type = None
+                running.doc_type = None
+            elif doc_type is not None and self.api.type_handling == TypeHandling.TRANSITION:
+                # Given a type_name, used to detect is type is present or not
+                running.with_type = 'mappings' in template and doc_type in template['mappings']
+                if running.with_type:
+                    running.mappings = template['mappings'][doc_type]
+                    running.doc_type = doc_type
+                else:
+                    running.mappings = template['mappings']
+                    running.doc_type = None
+            elif doc_type is not None and self.api.type_handling == TypeHandling.IMPLICIT:
+                raise Exception("implicit type handling don't accept type_name argument")
+            else:
+                running.mappings = template['mappings']
+                running.doc_type = None
+        elif mapping_file is not None:
+            with open(template_file_name, "r") as template_file:
+                running.mapping = load(template_file, Loader=Loader)
+        return super().check_verb_args(running, *args, **kwargs)
+
+    async def action(self, element, running):
+        return await self.api.escnx.indices.put_mapping(running.mappings, index=element[0], doc_type=running.doc_type)
+
+    def to_str(self, running, value):
+        name = value[0][0]
+        status = value[1].get('acknowledged', False)
+        if status and name is not None:
+            return '%s mapping updated' % name
+        elif status and name is not None:
+            return {name: value}
+        else:
+            return value
 
 
 @command(IndicesDispatcher, verb='allocation_explain')
