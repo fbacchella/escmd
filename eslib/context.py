@@ -54,6 +54,8 @@ class Context(object):
                    'timeout': ['api', 'timeout'],
                    'typehandling': ['api', 'type_handling'],
                    'maxactive': ['api', 'maxactive'],
+                   'impersonate': ['api', 'impersonate'],
+                   'bearer_token': ['api', 'bearer_token'],
                    }
 
     # default values for connection
@@ -74,6 +76,9 @@ class Context(object):
             'connection_class': None,
             'http_version': None,
             'type_handling': TypeHandling.IMPLICIT.name,
+            'impersonate': None,
+            'bearer_token': None,
+            'bearer_token_file': None,
         },
         'logging': {
             'filters': 'header,data,text',
@@ -106,6 +111,9 @@ class Context(object):
         # Check consistency of authentication setup
         explicit_user = 'password' in kwargs or 'passwordfile' in kwargs or 'username' in kwargs
         explicit_kerberos = 'kerberos' in kwargs and kwargs.get('kerberos')
+        explicit_bearer_token = 'bearer_token' in kwargs and kwargs.get('bearer_token')
+        explicit_bearer_token_file = 'bearer_token_file' in kwargs and kwargs.get('bearer_token_file')
+
         if explicit_user and explicit_kerberos:
             raise ConfigurationError('both kerberos and login/password authentication requested')
 
@@ -144,16 +152,27 @@ class Context(object):
 
         if explicit_user:
             self.current_config['api']['kerberos'] = False
+            self.current_config['api']['bearer_token'] = None
             if 'ssl' in self.current_config:
                 self.current_config['ssl']['cert_file'] = None
                 self.current_config['ssl']['key_file'] = None
         elif explicit_kerberos:
             self.current_config['api']['username'] = None
             self.current_config['api']['password'] = None
+            self.current_config['api']['bearer_token'] = None
             if 'ssl' in self.current_config:
                 self.current_config['ssl']['cert_file'] = None
                 self.current_config['ssl']['key_file'] = None
-
+        elif explicit_bearer_token or explicit_bearer_token_file:
+            self.current_config['api']['username'] = None
+            self.current_config['api']['password'] = None
+            self.current_config['api']['kerberos'] = False
+            if 'ssl' in self.current_config:
+                self.current_config['ssl']['cert_file'] = None
+                self.current_config['ssl']['key_file'] = None
+            if explicit_bearer_token_file:
+                with open(explicit_bearer_token_file) as f:
+                    self.current_config['api']['bearer_token'] = f.read().strip()
         if self.current_config['api']['kerberos'] and self.current_config.get('kerberos', {}).get('keytab', None) is not None:
             import gssapi
             import os
@@ -255,6 +274,16 @@ class Context(object):
         if self.current_config['api']['http_version'] is not None:
             cnxprops.update({
                 'http_version': self.current_config['api']['http_version'],
+            })
+
+        if self.current_config['api']['impersonate'] is not None:
+            cnxprops.update({
+                'impersonate': self.current_config['api']['impersonate'],
+            })
+
+        if self.current_config['api']['bearer_token'] is not None:
+            cnxprops.update({
+                'bearer_token': self.current_config['api']['bearer_token'],
             })
 
         if self.current_config['api']['username'] is not None and self.current_config['api']['password'] is not None:

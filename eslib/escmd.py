@@ -71,6 +71,9 @@ def get_parser(default_config=None):
     parser.add_option("-t", "--timeout", dest="timeout", help="Connection timeout", default=None, type=int)
     parser.add_option("-T", "--typehandling", dest="typehandling", help="Define how to handle type", default=None)
     parser.add_option("-m", "--maxactive", dest="maxactive", help="Define how many concurrent connections are allowed to Elastic", default=None, type=int)
+    parser.add_option("-i", "--impersonate", dest="impersonate", help="Impersonate as (for SearchGuard)", default=None)
+    parser.add_option("--token", dest="bearer_token", help="Authenticate using a bearer token", default=None)
+    parser.add_option("--token_file", dest="bearer_token_file", help="Authenticate using a bearer token", default=None)
     return parser
 
 

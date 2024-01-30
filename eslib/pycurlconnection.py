@@ -391,6 +391,7 @@ class PyCurlConnection(Connection):
     def __init__(self,
                  multi_handle=None,
                  http_auth=None, kerberos=False, user_agent="pycurl/eslib", timeout=10, http_version=None,
+                 impersonate=None, bearer_token=None,
                  use_ssl=False, verify_certs=False, ssl_opts={},
                  debug=False, debug_filter=CurlDebugType.HEADER + CurlDebugType.DATA, logger=sys.stderr,
                  **kwargs):
@@ -409,6 +410,8 @@ class PyCurlConnection(Connection):
         else:
             self.use_ssl = False
         self.kerberos = kerberos
+        self.impersonate = impersonate
+        self.bearer_token = bearer_token
         if isinstance(http_auth, tuple):
             self.http_auth = ':'.join(http_auth)
         else:
@@ -499,6 +502,10 @@ class PyCurlConnection(Connection):
             'Content-Type': 'application/json',
             'Expect': '',
         }
+        if self.impersonate:
+            default_headers['sg_impersonate_as'] = self.impersonate
+        if self.bearer_token:
+            default_headers['Authorization'] = 'Bearer ' + self.bearer_token
         if headers is not None:
             default_headers.update(headers)
         header_lines = ["%s: %s" % (k, v) for (k, v) in default_headers.items()]
