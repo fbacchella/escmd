@@ -55,3 +55,4 @@ import eslib.plugins
 import eslib.xpack
 import eslib.policies
 import eslib.searchguard
+import eslib.ilm
