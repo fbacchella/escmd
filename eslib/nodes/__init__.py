@@ -71,7 +71,7 @@ class NodesStats(DumpVerb):
 
     def to_str(self, running, value):
         for k, v in value[1]['nodes'].items():
-            yield "{\"%s\": %s}" % (value[0][1], json.dumps(v, **running.formatting))
+            yield "{\"%s\": %s}" % (v['name'], json.dumps(v, **running.formatting))
 
 
 @command(NodesDispatcher)
