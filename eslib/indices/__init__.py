@@ -1,9 +1,11 @@
+import json
+
 from eslib.verb import Verb, DumpVerb, RepeterVerb, ReadSettings, WriteSettings, CatVerb, List
 from eslib.dispatcher import dispatcher, command, Dispatcher
 from eslib.exceptions import ESLibError
 from asyncio import coroutine
 from json import loads, dumps
-from elasticsearch.exceptions import NotFoundError, ElasticsearchException
+from elasticsearch.exceptions import NotFoundError, ElasticsearchException, RequestError
 import re
 from yaml import load
 try:
@@ -521,3 +523,42 @@ class IndicesExplainLifecycl(RepeterVerb):
 
     def to_str(self, running, value):
         return dumps(value[1])
+
+
+@command(IndicesDispatcher, verb='allocation_explain')
+class ClusterAllocationExplain(DumpVerb):
+
+    def fill_parser(self, parser):
+        parser.add_option("-P", "--primary", dest="primary", default=None, action='store_true')
+        parser.add_option("-s", "--shard", dest="shard", default=None)
+        super().fill_parser(parser)
+
+    def check_verb_args(self, running, *args, index=None, primary=None, shard=None, **kwargs):
+        running.args = args
+        running.index = index
+        running.primary = primary
+        running.shard = shard
+        return super().check_verb_args(running, *args, **kwargs)
+
+    async def action(self, element, running):
+        body = {'index': element[0], 'shard': 0, 'primary': True}
+        if running.shard is not None:
+            body['shard'] = running.shard
+        if running.primary is not None:
+            body['primary'] = running.primary
+        try:
+            val = self.api.escnx.cluster.allocation_explain(body=body)
+        except RequestError as e:
+            if e.error == 'illegal_argument_exception':
+                reason = e.info.get('error', {}).get('reason','')
+                if reason.startswith:
+                    return None
+                else:
+                    raise e
+            else:
+                raise e
+            val = None
+        return await val
+
+    def to_str(self, running, item):
+        return json.dumps(item, **running.formatting)

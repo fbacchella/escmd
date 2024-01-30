@@ -20,10 +20,10 @@ class ClusterMaster(CatVerb):
         super(ClusterMaster, self).fill_parser(parser)
         parser.add_option("-l", "--local", dest="local", default=False, action='store_true')
 
-    def check_verb_args(self, running, *args, local=False, **kwargs):
+    def check_verb_args(self, running, *args, format='text', local=False, **kwargs):
         running.local = local
         running.args = args
-        return super().check_verb_args(running, *args, **kwargs)
+        return super().check_verb_args(running, *args, format='json', **kwargs)
 
     def get_source(self):
         return self.api.escnx.cat.master
@@ -68,6 +68,7 @@ class ClusterHealth(DumpVerb):
         waited = {}
         if running.waited_type is not None:
             waited['wait_for_' + running.waited_type] = running.waited_value
+        waited['timeout'] = "%ds" % self.api.timeout
         val = yield from self.api.escnx.cluster.health(level=level, **waited, pretty=pretty)
         return val
 
@@ -85,17 +86,31 @@ class ClusterHealth(DumpVerb):
 class ClusterAllocationExplain(DumpVerb):
 
     def fill_parser(self, parser):
-        parser.add_option("-w", "--wait_for", dest="wait_for", default=None)
+        parser.add_option("-i", "--index", dest="index", default=None)
+        parser.add_option("-P", "--primary", dest="primary", default=None, action='store_true')
+        parser.add_option("-s", "--shard", dest="shard", default=None)
         super().fill_parser(parser)
 
-    def check_verb_args(self, running, *args, **kwargs):
+    def check_verb_args(self, running, *args, index=None, primary=None, shard=None, **kwargs):
         running.args = args
+        running.index = index
+        running.primary = primary
+        running.shard = shard
         return super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
     def execute(self, running, **kwargs):
+        body = {}
+        if running.index is not None:
+            body['index'] = running.index
+            body['shard'] = 0
+            body['primary'] = True
+        if running.shard is not None:
+            body['shard'] = running.shard
+        if running.primary is not None:
+            body['primary'] = running.primary
         try:
-            val = yield from self.api.escnx.cluster.allocation_explain()
+            val = yield from self.api.escnx.cluster.allocation_explain(body=body)
         except RequestError as e:
             if e.error == 'illegal_argument_exception':
                 reason = e.info.get('error', {}).get('reason','')
@@ -192,7 +207,7 @@ class ClusterWriteSettings(WriteSettings):
 
 
 @command(ClusterDispatcher, verb='ilm_status')
-class ClusterHealth(DumpVerb):
+class ClusterIlmStatus(DumpVerb):
 
     @coroutine
     def get(self, running, **kwargs):
