@@ -1,3 +1,5 @@
+import re
+
 from eslib.verb import Verb, DumpVerb, CatVerb
 from eslib.dispatcher import dispatcher, command, Dispatcher
 from eslib.tree import TreeNode
@@ -23,17 +25,46 @@ class TasksDispatcher(Dispatcher):
 
 
 class TaskTreeNode(TreeNode):
-
+    patterns = {
+        'indices:data/write/update/byquery': (
+            re.compile('^update-by-query \\[(.*)\\] updated with Script.*$', re.DOTALL),
+            lambda x: 'update-by-query [%s] updated with Script' % x.group(1)
+        ),
+        'retention_lease_background_sync': (
+            re.compile('^retention_lease_background_sync shardId=(\\[.*\\]\\[\\d+\\])$', re.DOTALL),
+            lambda x: 'shardId=%s' % x.group(1)
+        ),
+        'indices:data/write/index': (
+            re.compile('^index {(\\[.*\\]\\[_doc\\]\\[null\\]), source\\[.*\\]}$', re.DOTALL),
+            lambda x: 'index %s' % x.group(1)
+        ),
+        'indices:admin/forcemerge': (
+            re.compile(r'^Force-merge indices \[(.*)\], maxSegments\[(\d+)\], onlyExpungeDeletes\[(\w+)\], flush\[(\w+)\]$', re.DOTALL),
+            lambda x: 'index=%s, maxSegments=%s, onlyExpungeDeletes=%s, flush=%s' % (x.group(1), x.group(2), x.group(3), x.group(4))
+        ),
+        'indices:admin/forcemerge[n]': (
+            re.compile(r'^Force-merge indices \[(.*)\], maxSegments\[(\d+)\], onlyExpungeDeletes\[(\w+)\], flush\[(\w+)\]$', re.DOTALL),
+             lambda x: ''
+        )
+    }
+    update_by_query_re = re.compile('^update-by-query \\[(.*)\\] updated with Script.*$', re.DOTALL)
+    retention_lease_background_sync_re = re.compile('^retention_lease_background_sync shardId=(\\[.*\\]\\[\\d+\\])$', re.DOTALL)
     def _value_to_str(self, level):
         node_name = self.value.get('node_name', '')
         running_time_in_nanos = int(self.value.get('running_time_in_nanos', -1))
         action = self.value.get('action', '')
+        description = self.value.get('description', '')
+        if action in TaskTreeNode.patterns:
+            matcher = re.fullmatch(TaskTreeNode.patterns[action][0], description)
+            if matcher is not None:
+                description = TaskTreeNode.patterns[action][1](matcher)
         running_time = datetime.timedelta(seconds=int(running_time_in_nanos / 1e9))
-        indentation = 35 - level*TreeNode.identation - len(action)
+        indentation = 43 - level*TreeNode.identation - len(action)
         while indentation < 0:
             indentation +=16
-        return "%s %-*s%s%-*s%s" % \
-               (action, indentation, '', node_name, 10-len(node_name), '', running_time)
+
+        return "%s %-*s%s%-*s%s %s" % \
+               (action, indentation, '', node_name, 10-len(node_name), '', running_time, description)
 
 
 @command(TasksDispatcher, verb='tree')
@@ -55,7 +86,7 @@ class TasksTree(Verb):
 
     @coroutine
     def get(self, running):
-        val = yield from self.api.escnx.tasks.list(actions=running.actions, group_by=running.group_by)
+        val = yield from self.api.escnx.tasks.list(actions=running.actions, group_by=running.group_by, detailed=True)
         return val
 
     @coroutine
