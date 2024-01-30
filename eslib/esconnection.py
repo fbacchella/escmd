@@ -51,7 +51,6 @@ class ElasticConnection(object):
     }
 
     def __init__(self, base="http://localhost:9200", debug_filter=CurlDebugType.HEADER + CurlDebugType.DATA, verify_certs=True, verbose=False, ca_file=None, kerberos=None, ssl_opts={}, user_agent=None):
-        print('init ElasticConnection')
         self._curl = pycurl.CurlMulti()
 
         # Activate share settings
