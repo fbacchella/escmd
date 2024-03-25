@@ -1,6 +1,10 @@
 import optparse
 import json
 from yaml import load
+try:
+    from yaml import CLoader as Loader, CDumper as Dumper
+except ImportError:
+    from yaml import Loader, Dumper
 import collections
 import re
 from asyncio import coroutine

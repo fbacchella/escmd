@@ -5,7 +5,7 @@ from eslib.verb import Verb, DumpVerb, RepeterVerb, ReadSettings, WriteSettings,
 from eslib.dispatcher import dispatcher, command, Dispatcher
 from eslib.exceptions import ESLibError
 from asyncio import coroutine
-from json import loads, dumps
+from json import dumps
 from elasticsearch.exceptions import NotFoundError, ElasticsearchException, RequestError
 import re
 from yaml import load
@@ -311,17 +311,15 @@ class IndiciesReadSettings(ReadSettings):
 @command(IndicesDispatcher, verb='writesettings')
 class IndiciesWriteSettings(WriteSettings):
 
-    @coroutine
-    def get_elements(self, running):
+    async def get_elements(self, running):
         index_names = []
         for i in running.object:
             index_names.append((i, None))
         return index_names
 
-    @coroutine
-    def action(self, element, running):
-        val = yield from self.api.escnx.indices.put_settings(body=running.values, index=element[0])
-        return val
+    async def action(self, element, running):
+        print(running.values)
+        return await self.api.escnx.indices.put_settings(body=running.values, index=element[0])
 
     def format(self, running, name, result):
         return "%s set" % (name)
