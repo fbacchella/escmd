@@ -1,7 +1,6 @@
 import elasticsearch.exceptions
 
 class PyCurlException(elasticsearch.exceptions.ConnectionError):
-
     def __str__(self):
         return "curl error %s on URL %s" % (
             self.error,
@@ -73,29 +72,41 @@ class ESLibTimeoutError(ESLibConnectionError):
 
 
 class ESLibAuthorizationException(ESLibError):
-
     def __init__(self, e, *args, **kwargs):
-        super().__init__(e.info['error']['reason'], *args, exception=e, value=e.info['error'], **kwargs)
+        super().__init__(self._resolve_reason(e), *args, exception=e, value=self._resolve_error(e), **kwargs)
+
+    def _resolve_error(self, e):
+        if 'error' in e.info:
+            return e.info['error']
+        else:
+            return {}
+
+    def _resolve_reason(self, e):
+        info = self._resolve_error(e)
+        if 'reason' in info:
+            return info['reason']
+        else:
+            return 'Access denied'
 
 
 class ESLibAuthenticationException(ESLibError):
-
     def __init__(self, e, *args, **kwargs):
         url = e.args[3].split('?', 1)[0]
         super().__init__(e.error + " " + url, *args, exception=e, **kwargs)
 
 
 class ESLibBatchError(ESLibError):
-
     def __init__(self, e, *args, **kwargs):
         failures = e.info['failures']
         super().__init__('%d Error%s in batch' % (len(failures), 's' if len(failures) > 0 else ''), *args, exception=e, value='Batch error', **kwargs)
 
 
 class ESLibRequestError(ESLibError):
-
     def __init__(self, e, *args, **kwargs):
-        super().__init__(e.info['error']['reason'], *args, exception=e, value=e.info['error'], **kwargs)
+        if (e.status_code >= 400 and e.status_code< 500) or ('elasticerror' in e.info and e.info['elasticerror'] == True):
+            super().__init__(e.info['error']['reason'], *args, exception=e, value=e.info['error'], **kwargs)
+        else:
+            super().__init__('HTTP failure: ' + e.error, *args, exception=e, value=e.status_code, **kwargs)
 
 
 class ESLibScriptError(ESLibError):
