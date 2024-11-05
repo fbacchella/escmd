@@ -131,7 +131,7 @@ def get_header_function(headers):
     return header_function
 
 
-content_type_re = re.compile("(?P<content_type>.*?); (?:charset=(?P<charset>.*))")
+content_type_re = re.compile("(?P<content_type>[a-zA_Z/]+)(?:; (?:charset=(?P<charset>.+)))?")
 
 
 def return_error(status_code, raw_data, content_type=None, http_message=None, url=None):
@@ -172,6 +172,8 @@ def decode_body(handler):
         if result is not None:
             encoding = result.group('charset')
             content_type = result.group('content_type')
+    if encoding is None:
+        encoding = 'UTF-8'
     if content_type is not None and (content_type.startswith('text') or 'json' in content_type):
         body = handler.buffer.getvalue().decode(encoding, 'replace')
     else:
