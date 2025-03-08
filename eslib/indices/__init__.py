@@ -30,11 +30,13 @@ class IndicesDispatcher(Dispatcher):
 
     @coroutine
     def get(self, running, index_name='_all', expand_wildcards=None, allow_no_indices=None, ignore_unavailable=None, filter_path='*'):
+        if expand_wildcards:
+            expand_wildcards= 'all'
         val = yield from self.api.escnx.indices.get(index=index_name,
                                                     expand_wildcards=expand_wildcards,
                                                     allow_no_indices=allow_no_indices,
                                                     ignore_unavailable=ignore_unavailable,
-                                                    filter_path=filter_path
+                                                    filter_path=filter_path,
         )
         return val
 
@@ -42,12 +44,58 @@ class IndicesDispatcher(Dispatcher):
 @command(IndicesDispatcher, verb='list')
 class IndiciesList(List):
 
-    template = lambda self, x, y: "%s\t%12d\t%4d\t%12s" % (x, y['indices'][x]['primaries']['docs']['count'], y['indices'][x]['primaries']['segments']['count'], y['indices'][x]['primaries']['store']['size'])
+    template_human = lambda self, x, y: "%s\t%12d\t%4d\t%12s" % (x, y['indices'][x]['primaries']['docs']['count'], y['indices'][x]['primaries']['segments']['count'], y['indices'][x]['primaries']['store']['size'])
+    template_machin = lambda self, x, y: "%s\t%12d\t%4d\t%12s" % (x, y['indices'][x]['primaries']['docs']['count'], y['indices'][x]['primaries']['segments']['count'], y['indices'][x]['primaries']['store']['size_in_bytes'])
 
-    @coroutine
-    def action(self, element, running):
-        stats = yield from self.api.escnx.indices.stats(index=element[0], human=True)
-        return stats
+    def fill_parser(self, parser):
+        super(List, self).fill_parser(parser)
+        parser.add_option("-m", "--machinreadable", dest="human", default=True, action='store_false')
+
+    def check_verb_args(self, running, *args, human=True, template=None, **kwargs):
+        running.human = human
+        if running.human and template is None:
+            template = self.template_human
+        elif not running.human and template is None:
+            template = self.template_machin
+        return super().check_verb_args(running, *args,template=template, **kwargs)
+
+    async def action(self, element, running):
+        return await self.api.escnx.indices.stats(index=element[0], human=running.human)
+
+
+@command(IndicesDispatcher, verb='recovery')
+class IndiciesRecovery(List):
+
+    template_human = lambda self, x, y: "%s\t%12d\t%4d\t%12s" % (x, y['indices'][x]['primaries']['docs']['count'], y['indices'][x]['primaries']['segments']['count'], y['indices'][x]['primaries']['store']['size'])
+    template_machin = lambda self, x, y: "%s\t%12d\t%4d\t%12s" % (x, y['indices'][x]['primaries']['docs']['count'], y['indices'][x]['primaries']['segments']['count'], y['indices'][x]['primaries']['store']['size_in_bytes'])
+
+    def fill_parser(self, parser):
+        super(List, self).fill_parser(parser)
+        parser.add_option("-m", "--machinreadable", dest="human", default=True, action='store_false')
+
+    def check_verb_args(self, running, *args, human=True, template=None, **kwargs):
+        running.human = human
+        if running.human and template is None:
+            template = self.template_human
+        elif not running.human and template is None:
+            template = self.template_machin
+        return super().check_verb_args(running, *args,template=template, **kwargs)
+
+    async def action(self, element, running):
+        return await self.api.escnx.indices.recovery(index=element[0])
+
+    def to_str(self, running, item):
+        name = item[0][0]
+        value = item[1]
+        shards = []
+        for shard in value[name]['shards']:
+            if shard['stage'] != 'DONE':
+                shards.append(shard)
+        if len(shards) > 0:
+            print("%s -> " % (name,))
+            for shard in shards:
+                print('    %s' % shard)
+        return None
 
 
 @command(IndicesDispatcher, verb='forcemerge')
@@ -132,12 +180,13 @@ class IndiciesReindex(RepeterVerb):
         parser.add_option("-s", "--suffix", dest="suffix", default='')
         parser.add_option("-i", "--infix_regex", dest="infix_regex", default=None)
         parser.add_option("-c", "--codec", dest="codec", default=None)
+        parser.add_option("--preserve", dest="preserve", default=False, help='Preserve old indices', action='store_true')
 
     def check_noun_args(self, running, **kwargs):
         return super().check_noun_args(running, filter_path='*.settings.index.lifecycle,*.settings.index.uuid,*.aliases', **kwargs)
 
     def check_verb_args(self, running, *args, template_name=None, infix_regex=None, prefix='', suffix='', keep_mapping=False,
-                        codec=None,
+                        codec=None, preserve=False,
                         **kwargs):
         running.settings = {}
         running.mappings = None
@@ -161,6 +210,7 @@ class IndiciesReindex(RepeterVerb):
             running.infix_regex = None
         running.prefix = prefix
         running.suffix = suffix
+        running.preserve = preserve
         return super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
@@ -213,7 +263,7 @@ class IndiciesReindex(RepeterVerb):
         if running.codec:
             new_index_settings['index']['codec'] = running.codec
 
-        # if lifecycle managed, extract informations for later processing
+        # if lifecycle managed, extract information for later processing
         if 'lifecycle' in index_data['settings']['index']:
             lifecycle = index_data['settings']['index']['lifecycle']
             del index_data['settings']['index']['lifecycle']
@@ -230,7 +280,7 @@ class IndiciesReindex(RepeterVerb):
 
         # Doing the reindexation
         reindex_status = yield from self.api.escnx.reindex(
-            body={"conflicts": "proceed", 'source': {'index': index_name, 'sort': '_doc', 'size': 10000},
+            body={"conflicts": "proceed", 'source': {'index': index_name},
                   'dest': {'index': new_index_name, 'version_type': 'external'}})
 
         # Ensure the minimum segments
@@ -267,34 +317,38 @@ class IndiciesReindex(RepeterVerb):
                     aliases_actions.append({'add': {'index': new_index_name, 'alias': a}})
                 yield from self.api.escnx.indices.update_aliases(body={'actions': aliases_actions})
 
-            yield from self.api.escnx.indices.delete(index=index_name)
-
-            # the old index was not suffixed, keep it's name as an alias
-            if infix == index_name:
-                yield from self.api.escnx.indices.update_aliases(body={
-                    'actions': [
-                        {'add': {'index': new_index_name, 'alias': index_name}}
-                    ]
-                })
+            # If the old index is to be deleted, add the name as an alias
+            if not running.preserve:
+                yield from self.api.escnx.indices.delete(index=index_name)
+                # the old index was not suffixed, keep it's name as an alias
+                if infix == index_name:
+                    yield from self.api.escnx.indices.update_aliases(body={
+                        'actions': [
+                            {'add': {'index': new_index_name, 'alias': index_name}}
+                        ]
+                    })
         return reindex_status
 
 
 @command(IndicesDispatcher, verb='dump')
 class IndiciesDump(DumpVerb):
-    pass
+
+    async def get(self, running, index_name, **kwargs):
+        return await self.api.escnx.indices.get(index=index_name)
+
 
 @command(IndicesDispatcher, verb='readsettings')
 class IndiciesReadSettings(ReadSettings):
 
     @coroutine
     def get_elements(self, running):
-        val = yield from self.api.escnx.cat.indices(index=running.index_name, format='json', h='index')
+        val = yield from self.api.escnx.cat.indices(index=running.index_name, format='json', h='index', expand_wildcards='all')
         return map(lambda x: x['index'], val)
 
     @coroutine
     def get_settings(self, running, element):
         # Can't use get_settings filtering of settings, because if settings name are given, or even '_all', flat_settings don't work any more
-        index_entry = yield from self.api.escnx.indices.get_settings(index=element, include_defaults=True, flat_settings=running.flat)
+        index_entry = yield from self.api.escnx.indices.get_settings(index=element, include_defaults=True, flat_settings=running.flat, expand_wildcards='all')
         #index_entry = yield from self.api.escnx.indices.get(index=element, include_defaults=True, flat_settings=running.flat)
         index_name, index_data = next(iter(index_entry.items()))
         new_settings = {}
@@ -359,11 +413,11 @@ class IndiciesAddMapping(RepeterVerb):
 class IndicesGetFieldMapping(RepeterVerb):
 
     def fill_parser(self, parser):
-        parser.add_option("-t", "--type", dest="type", help="The type to add the mapping to", default='_default')
+        parser.add_option("-t", "--type", dest="type", help="The type to add the mapping to", default='_doc')
         parser.add_option("-f", "--flat", dest="flat", default=False, action='store_true')
         parser.add_option("-p", "--pretty", dest="pretty", default=False, action='store_true')
 
-    def check_verb_args(self, running, *args, flat=False, type='_default_', **kwargs):
+    def check_verb_args(self, running, *args, flat=False, type='_doc', **kwargs):
         running.type = type
         running.flat = flat
         return super().check_verb_args(running, *args, **kwargs)
@@ -382,8 +436,16 @@ class IndicesGetFieldMapping(RepeterVerb):
 
     @coroutine
     def action(self, element, running):
+        kwargs={}
+        if self.api.type_handling == TypeHandling.DEPRECATED:
+            kwargs['doc_type'] = None
+        elif self.api.type_handling == TypeHandling.IMPLICIT:
+            kwargs['doc_type'] = running.type
+        elif self.api.type_handling == TypeHandling.TRANSITION:
+            kwargs['doc_type'] = None
+
         try:
-            val = yield from self.api.escnx.indices.get_mapping(index=element[0], doc_type=running.type)
+            val = yield from self.api.escnx.indices.get_mapping(index=element[0], **kwargs)
             return val
         except NotFoundError as e:
             return e
@@ -393,10 +455,14 @@ class IndicesGetFieldMapping(RepeterVerb):
 
     def format(self, running, index, result):
         mappings = result[index]
-        if running.flat:
-            yield from self.flatten(index, mappings['mappings'][running.type]['properties'])
+        if self.api.type_handling == TypeHandling.DEPRECATED:
+            mappings_data = mappings['mappings']['properties']
         else:
-            yield dumps({index: mappings['mappings'][running.type]['properties']})
+            mappings_data = mappings['mappings'][running.type]['properties']
+        if running.flat:
+            yield from self.flatten(index, mappings_data)
+        else:
+            yield dumps({index: mappings_data})
 
     def flatten(self, prefix, fields):
         separator = '.' if len(prefix) > 0 else ''
@@ -444,7 +510,7 @@ class IndicesCreate(Verb):
         return super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
-    def get(self, running):
+    def get(self, running, **kwargs):
         return None
 
     @coroutine
@@ -484,8 +550,18 @@ class IndicesStats(DumpVerb):
 
     def to_str(self, running, value):
         if running.flat:
-            pass
-            #value = {k.replace('index.', ''): v for k, v in index_data['defaults'].items()}
+            stats = {k: self.flatten(v) for k, v in value[1]['indices'].items()}
+            if len(stats.keys()) == 1:
+                str_prefix = lambda x: ""
+            else:
+                str_prefix = lambda x: "%s " % x
+            output = ""
+            for k, v in stats.items():
+                for k2, v2 in v.items():
+                    output = "%s\n%s%s: %s" % (output, str_prefix(k), k2, v2)
+                #return "%s%s" % (str_prefix(k), v)
+                #return str(stats.values()[0])
+            return "%s\n" % output
         else:
             return dumps(value[1])
 
@@ -513,7 +589,7 @@ class IndicesExplainLifecycl(DumpVerb):
 
 
 @command(IndicesDispatcher, verb='retry_policy')
-class IndicesExplainLifecycl(RepeterVerb):
+class IndicesRetryPolicy(RepeterVerb):
 
     @coroutine
     def action(self, element, running, *args, only_keys=False, **kwargs):
@@ -522,6 +598,26 @@ class IndicesExplainLifecycl(RepeterVerb):
 
     def to_str(self, running, value):
         return dumps(value[1])
+
+
+@command(IndicesDispatcher, verb='segments')
+class IndicesSegments(RepeterVerb):
+
+    async def action(self, element, running, *args, only_keys=False, **kwargs):
+        return await self.api.escnx.indices.segments(element[0])
+
+    def to_str(self, running, value):
+        segments_data = value[1]['indices'][value[0][0]]
+        datas = {}
+        for (s,replica) in segments_data['shards'].items():
+            for segments in replica:
+                for si in segments['segments'].values():
+                    datas[si['generation']]={'num_docs': si['num_docs'], 'deleted_docs': si['deleted_docs'], 'size_in_bytes': si['size_in_bytes'],
+                                             'memory_in_bytes': si['memory_in_bytes'], 'committed': si['committed'] }
+        sorted(datas)
+        for (g, v) in datas.items():
+            print(g,v['num_docs'], v['deleted_docs'], v['size_in_bytes'], v['memory_in_bytes'], v['committed'])
+        return None
 
 
 @command(IndicesDispatcher, verb='updatemapping')
