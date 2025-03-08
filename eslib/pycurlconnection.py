@@ -1,8 +1,9 @@
-from elasticsearch import Connection, TransportError
+from elastic_transport import TransportError
+from elasticsearch import Connection
 from elasticsearch.exceptions import HTTP_EXCEPTIONS, ConnectionTimeout, ConnectionError
 import pycurl
 from io import BytesIO
-from elasticsearch.compat import urlencode
+from urllib.parse import urlencode
 import re
 import sys
 from enum import IntEnum

@@ -6,7 +6,7 @@ from eslib.dispatcher import dispatcher, command, Dispatcher
 from eslib.exceptions import ESLibError
 from asyncio import coroutine
 from json import dumps
-from elasticsearch.exceptions import NotFoundError, ElasticsearchException, RequestError
+from elasticsearch.exceptions import NotFoundError, ApiError, RequestError
 import re
 from yaml import load
 try:
@@ -451,7 +451,7 @@ class IndicesGetFieldMapping(RepeterVerb):
             return e
 
     def result_is_valid(self, result):
-        return not isinstance(result, ElasticsearchException)
+        return not isinstance(result, ApiError)
 
     def format(self, running, index, result):
         mappings = result[index]

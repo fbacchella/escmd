@@ -1,4 +1,5 @@
-from elasticsearch import Transport, TransportError, ConnectionTimeout, RequestError, AuthorizationException, AuthenticationException
+from elastic_transport import Transport, TransportError, ConnectionTimeout
+from elasticsearch import RequestError, AuthorizationException, AuthenticationException
 from asyncio import Future
 
 
