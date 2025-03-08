@@ -9,7 +9,7 @@ from inspect import isgenerator
 from traceback import print_exception
 from eslib.context import Context, ConfigurationError
 import elasticsearch.exceptions
-from eslib.exceptions import ESLibError
+from eslib.exceptions import ESLibError, ESLibNotFoundError
 
 
 def safe_print(string):
@@ -31,10 +31,10 @@ def filter_result(cmd, running, result):
                 if hasattr(s, 'source'):
                     print('Exception from source "%s":' % s.source, file=sys.stderr)
                 print_exception(type(s), s, s.__traceback__, file=sys.stderr)
-            elif s != None:
+            elif s is not None:
                 filter_result(cmd, running, s)
     elif result is not None and result is not False:
-        # Else if it return something, just print it
+        # Else if it returns something, just print it
         filter_result(cmd, running, cmd.to_str(running, result))
     elif result is not None:
         # It return false, something went wrong
@@ -58,8 +58,9 @@ class UpdateDict(dict):
 
 usage_common = "usage: %prog [options] object [object_args] verb [verbs_args]"
 
+
 def get_parser(default_config=None):
-    #The first level parser
+    # The first level parser
     parser = optparse.OptionParser(usage="%s\nobjects are:\n    %s" % (usage_common, "\n    ".join(list(eslib.dispatchers.keys()))))
     parser.disable_interspersed_args()
     parser.add_option("-c", "--config", dest="config_file", help="an alternative config file", default=default_config)
@@ -113,7 +114,6 @@ def main():
             verb = object_args.pop(0)
             try:
                 context.connect()
-
                 dispatcher.api = context
                 object_options = vars(object_options)
                 for k,v in list(object_options.items()):
@@ -124,10 +124,14 @@ def main():
                 print_run_phrase(dispatcher, verb, object_options, object_args)
                 return 0
             except elasticsearch.exceptions.ConnectionError as e:
-                print("failed to connect: ", e.error, file=sys.stderr)
+                print("Failed to connect: ", e.error, file=sys.stderr)
+                #import traceback
+                #traceback.print_exc()
                 return 251
+            except ESLibNotFoundError as e:
+                print(e.error_message, file=sys.stderr)
             except ESLibError as e:
-                print("    The action \"%s %s\" failed with \n%s" % (dispatcher.object_name, verb, e.error_message), file=sys.stderr)
+                print("The action \"%s %s\" failed with \n%s" % (dispatcher.object_name, verb, e.error_message), file=sys.stderr)
                 return 251
             finally:
                 if context is not None:
