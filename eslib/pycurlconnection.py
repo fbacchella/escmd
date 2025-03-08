@@ -20,7 +20,7 @@ status_line_re = re.compile(r'HTTP\/\S+\s+\d+(\s+(?P<status>.*?))?$')
 
 def version_tuple(version):
     if isinstance(version, str):
-        return tuple(map(int, (version.split("."))))
+        return version.split(".")
     else:
         return version
 
@@ -44,28 +44,67 @@ def set_version_info():
         else:
             setattr(version_info, i, value)
     features = set()
-    features_mapping = {'VERSION_ASYNCHDNS': 'AsynchDNS',
-                        'VERSION_GSSNEGOTIATE': 'GSS-Negotiate',
-                        'VERSION_IDN': 'IDN',
-                        'VERSION_IPV6': 'IPv6',
-                        'VERSION_LARGEFILE': 'Largefile',
-                        'VERSION_NTLM': 'NTLM',
-                        'VERSION_NTLM_WB': 'NTLM_WB',
-                        'VERSION_SSL': 'SSL',
-                        'VERSION_LIBZ': 'libz',
-                        'VERSION_UNIX_SOCKETS': 'UnixSockets',
-                        'VERSION_KERBEROS5': 'Kerberos',
-                        'VERSION_SPNEGO': 'SPNEGO',
-                        'VERSION_HTTP2': 'HTTP2',
-                        'VERSION_GSSAPI': 'GSS-API',
-                        'VERSION_TLSAUTH_SRP': 'TLS-SRP',
-                        'VERSION_PSL': 'PSL'}
-    for i in ('VERSION_IPV6', 'VERSION_KERBEROS4', 'VERSION_KERBEROS5', 'VERSION_SSL', 'VERSION_LIBZ', 'VERSION_NTLM',
-              'VERSION_GSSNEGOTIATE', 'VERSION_DEBUG', 'VERSION_CURLDEBUG', 'VERSION_ASYNCHDNS', 'VERSION_SPNEGO',
-              'VERSION_LARGEFILE',
-              'VERSION_IDN', 'VERSION_SSPI', 'VERSION_GSSAPI', 'VERSION_CONV', 'VERSION_TLSAUTH_SRP', 'VERSION_NTLM_WB',
-              'VERSION_HTTP2',
-              'VERSION_UNIX_SOCKETS', 'VERSION_PSL', 'VERSION_HTTPS_PROXY', 'VERSION_MULTI_SSL', 'VERSION_BROTLI'):
+    features_mapping = {
+        'VERSION_ASYNCHDNS': 'AsynchDNS',
+        'VERSION_GSSNEGOTIATE': 'GSS-Negotiate',
+        'VERSION_IDN': 'IDN',
+        'VERSION_IPV6': 'IPv6',
+        'VERSION_LARGEFILE': 'Largefile',
+        'VERSION_NTLM': 'NTLM',
+        'VERSION_NTLM_WB': 'NTLM_WB',
+        'VERSION_SSL': 'SSL',
+        'VERSION_LIBZ': 'libz',
+        'VERSION_UNIX_SOCKETS': 'UnixSockets',
+        'VERSION_KERBEROS4': 'Kerberos5',
+        'VERSION_KERBEROS5': 'Kerberos',
+        'VERSION_SPNEGO': 'SPNEGO',
+        'VERSION_HTTP2': 'HTTP2',
+        'VERSION_GSSAPI': 'GSS-API',
+        'VERSION_TLSAUTH_SRP': 'TLS-SRP',
+        'VERSION_SSPI': ' WindowsSSPI',
+        'VERSION_PSL': 'PSL',
+        'VERSION_HSTS': 'HSTS',
+        'VERSION_HTTPS_PROXY': 'HTTPS-proxy',
+        'VERSION_ALTSVC': 'alt-svc',
+        'VERSION_MULTI_SSL': 'MultiSSL',
+        'VERSION_BROTLI': 'brotli',
+        'VERSION_THREADSAFE': 'threadsafe',
+    }
+    curl_version_info_data = (
+        "VERSION_IPV6",
+        "VERSION_KERBEROS4",
+        "VERSION_SSL",
+        "VERSION_LIBZ",
+        "VERSION_NTLM",
+        "VERSION_GSSNEGOTIATE",
+        "VERSION_DEBUG",
+        "VERSION_ASYNCHDNS",
+        "VERSION_SPNEGO",
+        "VERSION_LARGEFILE",
+        "VERSION_IDN",
+        "VERSION_SSPI",
+        "VERSION_CONV",
+        "VERSION_CURLDEBUG",
+        "VERSION_TLSAUTH_SRP",
+        "VERSION_NTLM_WB",
+        "VERSION_HTTP2",
+        "VERSION_GSSAPI",
+        "VERSION_KERBEROS5",
+        "VERSION_UNIX_SOCKETS",
+        "VERSION_PSL",
+        "VERSION_HTTPS_PROXY",
+        "VERSION_MULTI_SSL",
+        "VERSION_BROTLI",
+        "VERSION_ALTSVC",
+        "VERSION_HTTP3",
+        "VERSION_ZSTD",
+        "VERSION_UNICODE",
+        "VERSION_HSTS",
+        "VERSION_GSASL",
+        "VERSION_THREADSAFE",
+    )
+
+    for i in curl_version_info_data:
         if hasattr(pycurl, i):
             if version_info.features & getattr(pycurl, i) != 0:
                 features.add(features_mapping.get(i, i))
