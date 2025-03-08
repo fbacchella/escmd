@@ -68,6 +68,23 @@ class Verb(object):
         else:
             return str(value)
 
+    def flatten(self, y):
+        out = {}
+
+        def flatten_data(x, name=''):
+            if type(x) is dict:
+                for a in x:
+                    flatten_data(x[a], name + a + '.')
+            elif type(x) is list:
+                i = 0
+                for a in x:
+                    flatten_data(a, name + str(i) + '.')
+                    i += 1
+            else:
+                out[name[:-1]] = x
+
+        flatten_data(y)
+        return out
 
 class RepeterVerb(Verb):
 
@@ -219,7 +236,11 @@ class List(RepeterVerb):
         if isinstance(template, str):
             return template.format(name=name, **value)
         else:
-            return str(template(name, value))
+            try:
+                return str(template(name, value))
+            except Exception as e:
+                # Failed to eval template, just return name
+                return name
 
 
 class CatVerb(Verb):
@@ -228,14 +249,15 @@ class CatVerb(Verb):
     def fill_parser(self, parser):
         super().fill_parser(parser)
         parser.add_option("-H", "--headers", dest="h", default=None)
-        parser.add_option("-f", "--format", dest="format", default='text')
+        parser.add_option("-f", "--format", dest="format", default='json')
         parser.add_option("-p", "--pretty", dest="pretty", default=False, action='store_true')
 
-    def check_verb_args(self, running, *args, pretty=False, **kwargs):
+    def check_verb_args(self, running, *args, pretty=False, format='json', **kwargs):
         if pretty:
             running.formatting = {'indent': 2, 'sort_keys': True}
         else:
             running.formatting = {}
+        running.format = format
         return super().check_verb_args(running, *args, **kwargs)
 
     @coroutine
@@ -244,14 +266,16 @@ class CatVerb(Verb):
 
     @coroutine
     def execute(self, running, **kwargs):
-        val = yield from self.get_source()(**kwargs)
+        val = yield from self.get_source()(format=running.format, **kwargs)
         return val
 
     def to_str(self, running, item):
         if isinstance(item, str):
             return item
-        else:
+        elif running.format == 'json':
             return json.dumps(item, **running.formatting)
+        else:
+            return item
 
 
 class Remove(Verb):
@@ -298,7 +322,7 @@ class ReadSettings(DumpVerb):
 
     def to_str(self, running, item):
         source, settings = item
-        # If only one object to be inspected, don't output it's name
+        # If only one object to be inspected, don't output its name
         if running.object is not None and len(running.object) == 1:
             source = None
         if len(settings) == 0:
@@ -306,10 +330,13 @@ class ReadSettings(DumpVerb):
         elif isinstance(settings, dict):
             if running.flat:
                 for i in settings.values():
-                    for k,v in i.items():
-                        yield source, (k,v)
+                    for k, v in i.items():
+                        yield source, (k, v)
             else:
-                yield json.dumps({source: settings}, **running.formatting)
+                if source is None:
+                    yield json.dumps(settings, **running.formatting)
+                else:
+                    yield json.dumps({source: settings}, **running.formatting)
         elif isinstance(settings, tuple):
             prefix = "%s " % source if source is not None else ""
             yield "%s%s: %s" % (prefix, settings[0], settings[1])
@@ -317,8 +344,8 @@ class ReadSettings(DumpVerb):
 
 class WriteSettings(RepeterVerb):
 
-    keyvalue_re = re.compile(r'^([-a-zA-Z0-9_\.]+)=(.*)$')
-    keydepth_re = re.compile(r'^([-a-zA-Z0-9_]+)(?:\.(.*))?$')
+    keyvalue_re = re.compile(r'^([-a-zA-Z\d_.]+)=(.*)$')
+    keydepth_re = re.compile(r'^([-a-zA-Z\d_]+)(?:\.(.*))?$')
 
     def fill_parser(self, parser):
         super().fill_parser(parser)
@@ -328,7 +355,7 @@ class WriteSettings(RepeterVerb):
         values = {}
         if settings_file_name is not None:
             with open(settings_file_name, "r") as settings_file:
-                values = load(settings_file)
+                values = load(settings_file, Loader=Loader)
                 if 'settings' in values:
                     values = values['settings']
         failed = False
