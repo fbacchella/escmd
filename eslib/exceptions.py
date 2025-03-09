@@ -1,5 +1,6 @@
 import elasticsearch.exceptions
 
+
 class PyCurlException(elasticsearch.exceptions.ConnectionError):
     def __str__(self):
         return "curl error %s on URL %s" % (

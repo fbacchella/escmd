@@ -1,9 +1,12 @@
+import asyncio
 from asyncio import coroutine
 
-from eslib.verb import List, DumpVerb, CatVerb
+from eslib.verb import List, DumpVerb, CatVerb, Verb
 from eslib.dispatcher import dispatcher, command, Dispatcher
+from elasticsearch.exceptions import RequestError
 
 import json
+from random import shuffle
 
 filter = []
 for i in ('name', 'transport_address', 'ip', 'host', 'version', 'roles'):
@@ -52,6 +55,59 @@ class NodesDump(DumpVerb):
         running.metrics = None
         return super().check_verb_args(running, *args, **kwargs)
 
+
+@command(NodesDispatcher, verb='rebalance')
+class NodesRebalance(Verb):
+
+    def fill_parser(self, parser):
+        super().fill_parser(parser)
+        parser.add_option("-i", "--index", dest="indices", default=[], action='append')
+        parser.add_option("-d", "--destinations", dest="destinations", default=[], action='append')
+
+    def check_verb_args(self, running, *args, indices=[], destinations=[], **kwargs):
+        running.indices = indices
+        running.destinations = destinations
+        return super().check_verb_args(running, *args, **kwargs)
+
+    async def execute(self, running):
+        (routing, nodes) = await asyncio.gather(self._resolve_route(running), self._resolve_nodes(running))
+        # The set of shards to move
+        shards = []
+        for (i, ii) in routing['routing_table']['indices'].items():
+            for (s, si) in ii['shards'].items():
+                for sd in si:
+                    if sd['node'] not in running.object and sd['state'] == 'STARTED':
+                        continue
+                    shards.append(sd)
+        shuffle(shards)
+        shuffle(nodes)
+        commands = []
+        i = 0
+        for s in shards:
+            source_node_name =  running.object[s['node']]['name']
+            destination_node_name = nodes[i % len(nodes)]
+            i += 1
+            c = {'move': {'index': s['index'], 'shard': s['shard'], 'from_node': source_node_name, 'to_node': destination_node_name}}
+            commands.append(c)
+        try:
+            status = await self.api.escnx.cluster.reroute({'commands': commands}, dry_run=False, metric='none', explain=True)
+        except RequestError as ex:
+            print(ex.status_code)
+            for e in ex.info['error']['root_cause']:
+                print(e['reason'])
+            return ()
+        return status
+
+    async def _resolve_route(self, running):
+        return await self.api.escnx.cluster.state(allow_no_indices=True, index=running.indices, filter_path='routing_table')
+
+    async def _resolve_nodes(self, running):
+        nodes = []
+        val = await self.api.escnx.nodes.info('_all', filter_path='nodes.*.name')
+        for k, v in val['nodes'].items():
+            if v['name'] in running.destinations:
+                nodes.append(v['name'])
+        return nodes
 
 @command(NodesDispatcher, verb='stats')
 class NodesStats(DumpVerb):
