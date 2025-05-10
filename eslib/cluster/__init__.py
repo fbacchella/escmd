@@ -130,12 +130,29 @@ class ClusterAllocationExplain(DumpVerb):
 @command(ClusterDispatcher, verb='reroute')
 class ClusterReroute(DumpVerb):
 
+    def _action_allocate_empty_primary(self, index, shard, node, accept_data_loss=True):
+        return  {"index" : index, "shard" : int(shard), "node" : node, "accept_data_loss": self.str_to_bool(accept_data_loss)}
+
+    def _action_move(self, index, shard, from_node, to_node):
+        return {"index" : index, "shard" : int(shard), "from_node" : from_node, "to_node" : to_node}
+
+    reroute_action = {
+        'allocate_empty_primary': _action_allocate_empty_primary,
+        'move': _action_move,
+    }
+
     def fill_parser(self, parser):
         parser.add_option("-f", "--retry_failed", dest="retry_failed", default=False, action='store_true')
         parser.add_option("--dry_run", dest="dry_run", default=False, action='store_true')
         super().fill_parser(parser)
 
     def check_verb_args(self, running, *args, **kwargs):
+        running.assignemnts = []
+        for i in args:
+            action_args = i.split(':')
+            action_name = action_args.pop(0)
+            action = ClusterReroute.reroute_action[action_name](self, *action_args)
+            running.assignemnts.append({action_name: action})
         if kwargs.get('retry_failed', None) is not None:
             running.retry_failed = kwargs['retry_failed']
         if kwargs.get('dry_run', None) is not None:
@@ -143,13 +160,21 @@ class ClusterReroute(DumpVerb):
         running.args = args
         return super().check_verb_args(running, *args, **kwargs)
 
-    @coroutine
-    def execute(self, running, **kwargs):
-        val = yield from self.api.escnx.cluster.reroute(retry_failed=running.retry_failed, dry_run=running.dry_run)
-        return val
+    async def execute(self, running, **kwargs):
+        reroute_body = {'commands': running.assignemnts}
+        return await self.api.escnx.cluster.reroute(body=reroute_body, metric='none', retry_failed=running.retry_failed, dry_run=running.dry_run)
 
     def to_str(self, running, item):
-        return json.dumps(item, **running.formatting)
+        return True
+
+    def str_to_bool(self, s: str) -> bool:
+        s = s.strip().lower()
+        if s in ("true", "1", "yes", "y", "on"):
+            return True
+        elif s in ("false", "0", "no", "n", "off"):
+            return False
+        else:
+            raise ValueError(f"Invalid boolean value : '{s}'")
 
 
 @command(ClusterDispatcher, verb='readsettings')
