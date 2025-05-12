@@ -130,7 +130,7 @@ class ClusterAllocationExplain(DumpVerb):
 @command(ClusterDispatcher, verb='reroute')
 class ClusterReroute(DumpVerb):
 
-    def _action_allocate_empty_primary(self, index, shard, node, accept_data_loss=True):
+    def _action_allocate_empty_primary(self, index, shard, node, accept_data_loss=False):
         return  {"index" : index, "shard" : int(shard), "node" : node, "accept_data_loss": self.str_to_bool(accept_data_loss)}
 
     def _action_move(self, index, shard, from_node, to_node):
@@ -165,16 +165,19 @@ class ClusterReroute(DumpVerb):
         return await self.api.escnx.cluster.reroute(body=reroute_body, metric='none', retry_failed=running.retry_failed, dry_run=running.dry_run)
 
     def to_str(self, running, item):
-        return True
+        return ""
 
-    def str_to_bool(self, s: str) -> bool:
-        s = s.strip().lower()
-        if s in ("true", "1", "yes", "y", "on"):
-            return True
-        elif s in ("false", "0", "no", "n", "off"):
-            return False
+    def str_to_bool(self, s):
+        if isinstance(s, bool):
+            return s
         else:
-            raise ValueError(f"Invalid boolean value : '{s}'")
+            s = s.strip().lower()
+            if s in ("true", "1", "yes", "y", "on"):
+                return True
+            elif s in ("false", "0", "no", "n", "off"):
+                return False
+            else:
+                raise ValueError(f"Invalid boolean value : '{s}'")
 
 
 @command(ClusterDispatcher, verb='readsettings')
