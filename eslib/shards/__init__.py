@@ -96,33 +96,33 @@ class ShardsTree(Verb):
     def fill_parser(self, parser):
         parser.add_option("-s", "--status", dest="status", default='all')
         parser.add_option("-i", "--indices", dest="indices", default='*')
+        parser.add_option("-f", "--flat", dest="flat", default=False, action='store_true')
 
-    def check_verb_args(self, running, *args, status='all', indices='*', **kwargs):
+    def check_verb_args(self, running, *args, status='all', indices='*', flat=False, **kwargs):
         if not status in ShardsTree.statuses:
             raise Exception('unknow status: %s' % status)
         running.status = status
         running.indices = indices
+        running.flat = flat
         return super().check_verb_args(running, *args, **kwargs)
 
-    @coroutine
-    def get(self, running):
-        return self.api.escnx.indices.shard_stores(index=running.indices, status=running.status)
+    async def get(self, running):
+        return await self.api.escnx.indices.shard_stores(index=running.indices, status=running.status)
 
-    @coroutine
-    def execute(self, running):
-        tree = ShardTreeNode(None)
+    async def execute(self, running):
+        tree = ShardTreeNode(None, running.flat)
 
         for index, shards in running.object['indices'].items():
             shards=shards['shards']
             if len(shards) == 0:
                 continue
-            index_node = ShardTreeNode(index)
+            index_node = ShardTreeNode(index, running.flat)
             tree.addchild(index_node)
             for snum, shard in shards.items():
-                shard_node = ShardTreeNode(snum)
+                shard_node = ShardTreeNode(snum, running.flat)
                 index_node.addchild(shard_node)
                 for replica in shard['stores']:
-                    replica_node = ShardTreeNode(replica)
+                    replica_node = ShardTreeNode(replica, running.flat)
                     shard_node.addchild(replica_node)
         return tree
 
