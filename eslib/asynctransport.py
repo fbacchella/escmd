@@ -100,7 +100,9 @@ class AsyncTransport(Transport):
                 else:
                     try:
                         if data:
-                            data = self.deserializer.loads(data, headers_out.get('Content-Type'))
+                            contenttype = headers_out.get('content-type')
+                            if contenttype is not None:
+                                data = self.deserializer.loads(data, contenttype)
                         future.set_result(data)
                     except Exception as e:
                         future.set_exception(e)
