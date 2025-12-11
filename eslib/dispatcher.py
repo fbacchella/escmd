@@ -1,8 +1,7 @@
 from eslib.exceptions import ESLibError
 from eslib import dispatchers, join_default
 from eslib.running import Running
-from asyncio import coroutine
-import elasticsearch.exceptions
+
 
 def command(dispatcher_class, verb=None):
     def decorator(command_class):
@@ -42,8 +41,7 @@ class Dispatcher(object):
         join_default(kwargs, {'filter_path': self.default_filter_path})
         return kwargs
 
-    @coroutine
-    def get(self, running, **kwargs):
+    async def get(self, running, **kwargs):
         raise NotImplementedError
 
     def get_cmd(self, verb):

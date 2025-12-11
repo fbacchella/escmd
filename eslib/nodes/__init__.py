@@ -7,6 +7,7 @@ from elasticsearch.exceptions import RequestError
 import json
 from random import shuffle
 
+
 filter = []
 for i in ('name', 'transport_address', 'ip', 'host', 'version', 'roles'):
     filter.append('nodes.*.%s' % i)

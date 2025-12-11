@@ -7,7 +7,6 @@ except ImportError:
     from yaml import Loader, Dumper
 import collections
 import re
-from asyncio import coroutine
 from asyncio import ensure_future, wait
 from elasticsearch.exceptions import TransportError, ElasticsearchException
 from eslib.exceptions import resolve_exception, ESLibError
@@ -48,13 +47,10 @@ class Verb(object):
     def check_verb_args(self, running, *args, **kwargs):
         return kwargs
 
-    @coroutine
-    def get(self, running, **kwargs):
-        val = yield from self.dispatcher.get(running, **kwargs)
-        return val
+    async def get(self, running, **kwargs):
+        return await self.dispatcher.get(running, **kwargs)
 
-    @coroutine
-    def execute(self, running):
+    async def execute(self, running):
         raise NotImplementedError
 
     def to_str(self, running, value):
@@ -119,12 +115,11 @@ class RepeterVerb(Verb):
         else:
             return None
 
-    @coroutine
-    def action(self, element, running):
+    async def action(self, element, running):
         raise NotImplementedError
 
-    @coroutine
-    def get_elements(self, running):
+    async def get_elements(self, running):
+        print('get_elements', running, running.object)
         return running.object.items()
 
     def to_str(self, running, value):
@@ -164,13 +159,10 @@ class DumpVerb(RepeterVerb):
         running.attrs = args
         return super().check_verb_args(running, pretty=pretty, **kwargs)
 
-    @coroutine
-    def get(self, running, filter_path=None, **kwargs):
-        val = yield from self.dispatcher.get(running, filter_path=filter_path, **kwargs)
-        return val
+    async def get(self, running, filter_path=None, **kwargs):
+        return await self.dispatcher.get(running, filter_path=filter_path, **kwargs)
 
-    @coroutine
-    def action(self, element, running, *args, only_keys=False, **kwargs):
+    async def action(self, element, running, *args, only_keys=False, **kwargs):
         curs = element[1]
         for i in running.attrs:
             if not isinstance(curs, dict) or curs is None:
@@ -220,9 +212,8 @@ class List(RepeterVerb):
         super(List, self).fill_parser(parser)
         parser.add_option("-t", "--template", dest="template", default=None)
 
-    @coroutine
-    def action(self, element, running, **kwargs):
-        node_info = self.dispatcher.get(running, **kwargs)
+    async def action(self, element, running, **kwargs):
+        node_info = await self.dispatcher.get(running, **kwargs)
         return node_info
 
     def to_str(self, running, item):
@@ -258,14 +249,11 @@ class CatVerb(Verb):
         running.format = format
         return super().check_verb_args(running, *args, **kwargs)
 
-    @coroutine
-    def get(self, running, **kwargs):
+    async def get(self, running, **kwargs):
         return {}
 
-    @coroutine
-    def execute(self, running, **kwargs):
-        val = yield from self.get_source()(format=running.format, **kwargs)
-        return val
+    async def execute(self, running, **kwargs):
+        return await self.get_source()(format=running.format, **kwargs)
 
     def to_str(self, running, item):
         if isinstance(item, str):
@@ -305,9 +293,8 @@ class ReadSettings(DumpVerb):
         running.settings = set(args)
         return super().check_verb_args(running, **kwargs)
 
-    @coroutine
-    def action(self, element, running, *args, only_keys=False, **kwargs):
-        settings = yield from self.get_settings(running, element)
+    async def action(self, element, running, *args, only_keys=False, **kwargs):
+        settings = await self.get_settings(running, element)
         if len(running.settings) > 0:
             new_settings = {}
             for category, values in settings.items():
