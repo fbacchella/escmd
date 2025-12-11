@@ -3,10 +3,9 @@ from eslib.dispatcher import dispatcher, command, Dispatcher
 from eslib.context import TypeHandling
 from yaml import load
 try:
-    from yaml import CLoader as Loader, CDumper as Dumper
+    from yaml import CLoader as Loader
 except ImportError:
-    from yaml import Loader, Dumper
-from asyncio import coroutine
+    from yaml import Loader
 
 
 @dispatcher(object_name="template", default_filter_path='*.order')
@@ -19,19 +18,15 @@ class TemplatesDispatcher(Dispatcher):
         running.template_name = template_name
         return super().check_noun_args(running, template_name=template_name, **kwargs)
 
-    @coroutine
-    def get(self, running, template_name=None, filter_path=None):
-        val = yield from self.api.escnx.indices.get_template(name=template_name, filter_path=filter_path)
-        return val
+    async def get(self, running, template_name=None, filter_path=None):
+        return await self.api.escnx.indices.get_template(name=template_name, filter_path=filter_path)
 
 
 @command(TemplatesDispatcher)
 class TemplatesList(List):
 
-    @coroutine
-    def action(self, element, running):
-        template = yield from self.api.escnx.indices.get_template(element[0], filter_path='*.order,*.index_patterns')
-        return template
+    async def action(self, element, running):
+        return await self.api.escnx.indices.get_template(element[0], filter_path='*.order,*.index_patterns')
 
     def to_str(self, running, item):
         name, value = list(item[1].items())[0]
@@ -74,13 +69,11 @@ class TemplatesPut(Verb):
                 del running.template['template']
         return super().check_verb_args(running, *args, **kwargs)
 
-    @coroutine
-    def get(self, running, template_name, filter_path):
+    async def get(self, running, template_name, filter_path):
         return {}
 
-    @coroutine
-    def execute(self, running):
-        val = yield from self.api.escnx.indices.put_template(name=running.template_name, body=running.template, include_type_name=running.with_type)
+    async def execute(self, running):
+        val = await self.api.escnx.indices.put_template(name=running.template_name, body=running.template, include_type_name=running.with_type)
         return val
 
     def to_str(self, running, value):
@@ -99,10 +92,8 @@ timeout – Explicit operation timeout
 @command(TemplatesDispatcher, verb='delete')
 class TemplatesDelete(RepeterVerb):
 
-    @coroutine
-    def action(self, element, *args, **kwargs):
-        val = yield from self.api.escnx.indices.delete_template(name=element[0])
-        return val
+    async def action(self, element, *args, **kwargs):
+        return await self.api.escnx.indices.delete_template(name=element[0])
 
     def check_verb_args(self, running):
         if running.template_name == '*' or running.template_name == '__all':
