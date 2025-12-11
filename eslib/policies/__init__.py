@@ -1,11 +1,10 @@
-from eslib.verb import Verb, List, DumpVerb, RepeterVerb, CatVerb
+from eslib.verb import Verb, List, DumpVerb, RepeterVerb
 from eslib.dispatcher import dispatcher, command, Dispatcher
 from yaml import load
 try:
-    from yaml import CLoader as Loader, CDumper as Dumper
+    from yaml import CLoader as Loader
 except ImportError:
-    from yaml import Loader, Dumper
-from asyncio import coroutine
+    from yaml import Loader
 
 
 @dispatcher(object_name="policy")
@@ -18,17 +17,15 @@ class PoliciesDispatcher(Dispatcher):
         running.policy_name = policy_name
         return super().check_noun_args(running, policy_name=policy_name, **kwargs)
 
-    @coroutine
-    def get(self, running, policy_name=None, filter_path=None):
-        val = yield from self.api.escnx.ilm.get_lifecycle(policy=policy_name)
+    async def get(self, running, policy_name=None, filter_path=None):
+        val = await self.api.escnx.ilm.get_lifecycle(policy=policy_name)
         return val
 
 
 @command(PoliciesDispatcher)
 class PoliciesList(List):
 
-    @coroutine
-    def action(self, element, running):
+    async def action(self, element, running):
         return {element[0]: element[1]}
 
     def to_str(self, running, item):
@@ -59,14 +56,11 @@ class PoliciesPut(Verb):
             running.policy = {'policy': running.policy}
         return super().check_verb_args(running, *args, **kwargs)
 
-    @coroutine
-    def get(self, running, **kwargs):
+    async def get(self, running, **kwargs):
         return {}
 
-    @coroutine
-    def execute(self, running):
-        val = yield from self.api.escnx.ilm.put_lifecycle(policy=running.policy_name, body=running.policy)
-        return val
+    async def execute(self, running):
+        return await self.api.escnx.ilm.put_lifecycle(policy=running.policy_name, body=running.policy)
 
     def to_str(self, running, value):
         return "%s added" % running.policy_name
@@ -75,10 +69,8 @@ class PoliciesPut(Verb):
 @command(PoliciesDispatcher, verb='delete')
 class PoliciesDelete(RepeterVerb):
 
-    @coroutine
-    def action(self, element, *args, **kwargs):
-        val = yield from self.api.escnx.ilm.delete_lifecycle(policy=element[0])
-        return val
+    async def action(self, element, *args, **kwargs):
+        return await self.api.escnx.ilm.delete_lifecycle(policy=element[0])
 
     def format(self, running, name, result):
         return "%s deleted" % name
