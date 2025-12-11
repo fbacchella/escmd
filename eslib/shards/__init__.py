@@ -1,4 +1,3 @@
-from asyncio import coroutine
 import json
 
 from eslib.dispatcher import dispatcher, command, Dispatcher
@@ -12,8 +11,7 @@ class ShardsDispatcher(Dispatcher):
     def check_noun_args(self, running):
         return {}
 
-    @coroutine
-    def get(self, running):
+    async def get(self, running):
         return {}
 
 
@@ -34,15 +32,12 @@ class ShardsMove(Verb):
             running.assignemnts.append({'move': {"index" : index, "shard" : int(shard), "from_node" : from_node, "to_node" : to_node}})
         return super().check_verb_args(running, **kwargs)
 
-    @coroutine
-    def get(self, running):
+    async def get(self, running):
         return True
 
-    @coroutine
-    def execute(self, running, dry_run=False, explain=False):
+    async def execute(self, running, dry_run=False, explain=False):
         reroute_body = {'commands': running.assignemnts}
-        val = yield from self.api.escnx.cluster.reroute(body=reroute_body, metric=['version'], dry_run=dry_run, explain=explain)
-        return val
+        return await self.api.escnx.cluster.reroute(body=reroute_body, metric=['version'], dry_run=dry_run, explain=explain)
 
     def to_str(self, running, value):
         acknowledged = value['acknowledged']
