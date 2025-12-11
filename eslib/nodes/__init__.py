@@ -1,5 +1,4 @@
 import asyncio
-from asyncio import coroutine
 
 from eslib.verb import List, DumpVerb, CatVerb, Verb
 from eslib.dispatcher import dispatcher, command, Dispatcher
@@ -24,18 +23,16 @@ class NodesDispatcher(Dispatcher):
         running.node_name = node_name
         return super().check_noun_args(running, node_name=node_name, **kwargs)
 
-    @coroutine
-    def get(self, running, node_name='_all', local_node=None, filter_path=None):
-        nodes = yield from self.api.escnx.nodes.info(node_name, filter_path=filter_path)
+    async def get(self, running, node_name='_all', local_node=None, filter_path=None):
+        nodes = await self.api.escnx.nodes.info(node_name, filter_path=filter_path)
         return nodes['nodes']
 
 
 @command(NodesDispatcher)
 class NodesList(List):
 
-    @coroutine
-    def action(self, element, running, filter_path=None, **kwargs):
-        infos = yield from self.api.escnx.nodes.info(element[0], human=True, filter_path=['nodes.*.name', 'nodes.*.version',
+    async def action(self, element, running, filter_path=None, **kwargs):
+        infos = await self.api.escnx.nodes.info(element[0], human=True, filter_path=['nodes.*.name', 'nodes.*.version',
                                                                                           'nodes.*.transport_address', 'nodes.*.roles'])
         return infos
 
@@ -120,9 +117,8 @@ class NodesStats(DumpVerb):
         running.metrics = ','.join(metrics)
         return super().check_verb_args(running, *args, **kwargs)
 
-    @coroutine
-    def action(self, element, running, *args, only_keys=False, **kwargs):
-        val = yield from self.api.escnx.nodes.stats(element[0], metric=running.metrics, level='node')
+    async def action(self, element, running, *args, only_keys=False, **kwargs):
+        val = await self.api.escnx.nodes.stats(element[0], metric=running.metrics, level='node')
         return val
 
     def to_str(self, running, value):
