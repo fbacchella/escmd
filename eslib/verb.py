@@ -119,7 +119,6 @@ class RepeterVerb(Verb):
         raise NotImplementedError
 
     async def get_elements(self, running):
-        print('get_elements', running, running.object)
         return running.object.items()
 
     def to_str(self, running, value):
