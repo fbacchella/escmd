@@ -6,7 +6,7 @@ from elasticsearch.compat import urlencode
 import re
 import sys
 import time
-from asyncio import Queue, QueueEmpty, get_event_loop, wait_for, TimeoutError, wait
+from asyncio import Queue, QueueEmpty, get_event_loop, wait_for, TimeoutError, wait, create_task
 import json
 import logging
 from eslib.exceptions import PyCurlException
@@ -239,7 +239,7 @@ class PyCurlMultiHander(object):
         self.share.setopt(pycurl.SH_SHARE, pycurl.LOCK_DATA_SSL_SESSION)
 
         self.handles = set()
-        self.waiting_handles = Queue(loop=self.loop)
+        self.waiting_handles = Queue()
         self.running = True
         self.maxactive = maxactive
 
@@ -257,7 +257,7 @@ class PyCurlMultiHander(object):
 
         # put the query in the waiting queue, that launch it if possible
         # and wait for the processing to be finished
-        await wait((future,self.waiting_handles.put(handle)), loop=self.loop)
+        await wait((future,create_task(self.waiting_handles.put(handle))))
         return future
 
     def close(self):
@@ -276,7 +276,7 @@ class PyCurlMultiHander(object):
         while len(self.handles) < self.maxactive:
             try:
                 if wait:
-                    handler = await wait_for(self.waiting_handles.get(), timeout, loop=self.loop)
+                    handler = await wait_for(self.waiting_handles.get(), timeout)
                 else:
                     handler = self.waiting_handles.get_nowait()
                 # only wait once

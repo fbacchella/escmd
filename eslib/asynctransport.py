@@ -1,4 +1,5 @@
-from elasticsearch import Transport, TransportError, ConnectionTimeout, RequestError, AuthorizationException, AuthenticationException
+from elasticsearch import RequestError, AuthorizationException, AuthenticationException
+from elasticsearch.transport import Transport, TransportError, ConnectionTimeout
 from asyncio import Future
 
 
@@ -120,7 +121,7 @@ class AsyncTransport(Transport):
          ignore,
          timeout) = query_iterator.send(None)
         while True:
-            curl_future = Future(loop=self.loop)
+            curl_future = Future()
             await connection.perform_request(method, next_url, next_params, next_body,
                                                        headers=next_headers,
                                                        ignore=ignore, future=curl_future)

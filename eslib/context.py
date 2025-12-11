@@ -2,7 +2,7 @@ from configparser import ConfigParser
 from elasticsearch import Elasticsearch
 from eslib.asynctransport import AsyncTransport
 from eslib.exceptions import resolve_exception
-from asyncio import new_event_loop, ensure_future, wait, FIRST_COMPLETED
+from asyncio import create_task, ensure_future, wait, FIRST_COMPLETED
 import copy
 import urllib.parse
 from enum import Enum
@@ -243,8 +243,8 @@ class Context(object):
             self.loop = parent.loop
         else:
             from eslib.pycurlconnection import PyCurlMultiHander
-
-            self.loop = new_event_loop()
+            import asyncio
+            self.loop = asyncio.get_event_loop()
             self.multi_handle = PyCurlMultiHander(self.current_config['api']['maxactive'], loop=self.loop)
             self.curl_perform_task = None
 
@@ -306,10 +306,10 @@ class Context(object):
                                    connection_class=self.current_config['api']['connection_class'],
                                    use_ssl=use_ssl, verify_certs=verify_certs, ssl_opts=ssl_opts,
                                    kerberos=self.current_config['api']['kerberos'],
-                                   http_auth=http_auth, loop=self.loop,
+                                   http_auth=http_auth,
                                    **cnxprops)
         if self.curl_perform_task is None:
-            self.curl_perform_task = ensure_future(self.multi_handle.perform(), loop=self.loop)
+            self.curl_perform_task = ensure_future(self.multi_handle.perform())
         if parent is None:
             return self.perform_query(self.escnx.ping())
         else:
@@ -317,7 +317,7 @@ class Context(object):
 
     def perform_query(self, query):
         async def looper():
-            done, pending = await wait((query, self.curl_perform_task), loop=self.loop, return_when=FIRST_COMPLETED)
+            done, pending = await wait((create_task(query), self.curl_perform_task), return_when=FIRST_COMPLETED)
             return done, pending
 
         done, pending = self.loop.run_until_complete(looper())
