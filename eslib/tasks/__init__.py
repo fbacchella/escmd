@@ -3,9 +3,8 @@ import re
 from eslib.verb import Verb, DumpVerb, CatVerb
 from eslib.dispatcher import dispatcher, command, Dispatcher
 from eslib.tree import TreeNode
-from asyncio import coroutine
+ 
 import datetime
-import time
 
 
 @dispatcher(object_name="task")
@@ -18,9 +17,8 @@ class TasksDispatcher(Dispatcher):
         running.task_id = task_id
         return super().check_noun_args(running, task_id=task_id, **kwargs)
 
-    @coroutine
-    def get(self, running, task_id=None, **kwargs):
-        val = yield from self.api.escnx.tasks.get(task_id=task_id)
+    async def get(self, running, task_id=None, **kwargs):
+        val = await self.api.escnx.tasks.get(task_id=task_id)
         return val
 
 
@@ -84,13 +82,11 @@ class TasksTree(Verb):
         running.actions = actions
         return super().check_verb_args(running, **kwargs)
 
-    @coroutine
-    def get(self, running):
-        val = yield from self.api.escnx.tasks.list(actions=running.actions, group_by=running.group_by, detailed=True)
+    async def get(self, running):
+        val = await self.api.escnx.tasks.list(actions=running.actions, group_by=running.group_by, detailed=True)
         return val
 
-    @coroutine
-    def execute(self, running):
+    async def execute(self, running):
         tree = TaskTreeNode(None)
         nodes = { '' : tree }
         try_parent = { '' : None }
@@ -147,8 +143,7 @@ class TaskDump(DumpVerb):
         running.actions = actions
         return super().check_verb_args(running, *args, **kwargs)
 
-    @coroutine
-    def get_elements(self, running):
+    async def get_elements(self, running):
         tasks_dict = {}
         for node, node_info in running.object['nodes'].items():
             tasks = node_info['tasks']
