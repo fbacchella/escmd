@@ -1,4 +1,3 @@
-from asyncio import coroutine
 from json import loads, dumps
 
 from eslib.dispatcher import dispatcher, command, Dispatcher
@@ -28,12 +27,11 @@ class DocumentDispatcher(Dispatcher):
         running.doc_type = doc_type
         return None
 
-    @coroutine
-    def get(self, running):
+    async def get(self, running):
         if running.id is not None:
-            val = yield from self.api.escnx.get(index=running.index_name, id=running.id, doc_type=running.doc_type)
-        elif running.search is not None:
-            val = yield from self.api.escnx.search(index=running.index_name, body=running.search, size=running.size, doc_type=running.doc_type)
+            val = await self.api.escnx.get(index=running.index_name, id=running.id, doc_type=running.doc_type)
+        elif getattr(running, 'search', None) is not None:
+            val = await self.api.escnx.search(index=running.index_name, body=running.search, size=running.size, doc_type=running.doc_type)
         else:
             val = None
         return val
@@ -42,9 +40,8 @@ class DocumentDispatcher(Dispatcher):
 @command(DocumentDispatcher, verb='dump')
 class IndiciesDump(DumpVerb):
 
-    @coroutine
-    def get(self, running):
-        val = yield from super().get(running)
+    async def get(self, running):
+        val = await super().get(running)
         # Required a single document, return it as a list
         if running.id is not None:
             val = {running.id: val}
@@ -68,21 +65,18 @@ class DocumentUpdateByQuery(Verb):
         running.scroll_size = scroll_size
         return super().check_verb_args(running, *args, **kwargs)
 
-    @coroutine
-    def get(self, running):
+    async def get(self, running):
         return None
 
-    @coroutine
-    def execute(self, running):
+    async def execute(self, running):
         body={}
         if running.langage is not None:
             body['script'] = {'lang': running.langage, 'source': running.expr}
         if running.query is not None:
             body['query'] = running.query
         try:
-            val = yield from self.api.escnx.update_by_query(index=running.index_name, body=body, size=None, scroll_size=running.scroll_size,
+            return await self.api.escnx.update_by_query(index=running.index_name, body=body, size=None, scroll_size=running.scroll_size,
                                                             doc_type=running.doc_type)
-            return val
         except elasticsearch.exceptions.TransportError as e:
             if e.error == 'script_exception' and e.status_code == 500:
                 raise ESLibScriptError(e)
@@ -96,8 +90,7 @@ class DocumentUpdateByQuery(Verb):
 @command(DocumentDispatcher, verb='list')
 class DocumentsList(RepeterVerb):
 
-    @coroutine
-    def get_elements(self, running, **kwargs):
+    async def get_elements(self, running, **kwargs):
         hits = []
         for i in running.object['hits']['hits']:
             hits.append(i['_id'])
@@ -106,6 +99,5 @@ class DocumentsList(RepeterVerb):
     def to_str(self, running, item):
         return "%s" % (item.keys())
 
-    @coroutine
-    def action(self, element, running):
+    async def action(self, element, running):
         return element
