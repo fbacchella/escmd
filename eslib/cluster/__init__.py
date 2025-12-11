@@ -1,5 +1,4 @@
-from asyncio import coroutine
-
+ 
 from eslib.dispatcher import dispatcher, command, Dispatcher
 from eslib.verb import ReadSettings, WriteSettings, DumpVerb, CatVerb
 from elasticsearch.exceptions import RequestError
@@ -43,8 +42,7 @@ class ClusterHealth(DumpVerb):
         parser.add_option("-l", "--level", dest="level", default='cluster')
         super().fill_parser(parser)
 
-    @coroutine
-    def get(self, running, **kwargs):
+    async def get(self, running, **kwargs):
         return {}
 
     def check_verb_args(self, running, *args, wait_for=None, level=None, **kwargs):
@@ -63,13 +61,12 @@ class ClusterHealth(DumpVerb):
             raise Exception('Unknow level: "%s"' % level)
         return super().check_verb_args(running, *args, level=level, **kwargs)
 
-    @coroutine
-    def execute(self, running, level, pretty=None, **kwargs):
+    async def execute(self, running, level, pretty=None, **kwargs):
         waited = {}
         if running.waited_type is not None:
             waited['wait_for_' + running.waited_type] = running.waited_value
         waited['timeout'] = "%ds" % self.api.timeout
-        val = yield from self.api.escnx.cluster.health(level=level, **waited, pretty=pretty)
+        val = await self.api.escnx.cluster.health(level=level, **waited, pretty=pretty)
         return val
 
     def to_str(self, running, item):
@@ -98,8 +95,7 @@ class ClusterAllocationExplain(DumpVerb):
         running.shard = shard
         return super().check_verb_args(running, *args, **kwargs)
 
-    @coroutine
-    def execute(self, running, **kwargs):
+    async def execute(self, running, **kwargs):
         body = {}
         if running.index is not None:
             body['index'] = running.index
@@ -110,7 +106,7 @@ class ClusterAllocationExplain(DumpVerb):
         if running.primary is not None:
             body['primary'] = running.primary
         try:
-            val = yield from self.api.escnx.cluster.allocation_explain(body=body)
+            val = await self.api.escnx.cluster.allocation_explain(body=body)
         except RequestError as e:
             if e.error == 'illegal_argument_exception':
                 reason = e.info.get('error', {}).get('reason','')
@@ -183,17 +179,14 @@ class ClusterReroute(DumpVerb):
 @command(ClusterDispatcher, verb='readsettings')
 class ClusterReadSettings(ReadSettings):
 
-    @coroutine
-    def get_elements(self, running):
+    async def get_elements(self, running):
         return (None,)
 
-    @coroutine
-    def get(self, running):
+    async def get(self, running):
         return None
 
-    @coroutine
-    def get_settings(self, running, element):
-        val = yield from self.api.escnx.cluster.get_settings(include_defaults=True, flat_settings=running.flat)
+    async def get_settings(self, running, element):
+        val = await self.api.escnx.cluster.get_settings(include_defaults=True, flat_settings=running.flat)
         return val
 
 
@@ -216,18 +209,15 @@ class ClusterWriteSettings(WriteSettings):
         running.destination = 'persistent' if persistent else 'transient'
         return super().check_verb_args(running, *args, **kwargs)
 
-    @coroutine
-    def get_elements(self, running):
+    async def get_elements(self, running):
         return (None,)
 
-    @coroutine
-    def get(self, running):
+    async def get(self, running):
         return None
 
-    @coroutine
-    def action(self, element, running):
+    async def action(self, element, running):
         values = running.values
-        val = yield from self.api.escnx.cluster.put_settings(body={running.destination: values})
+        val = await self.api.escnx.cluster.put_settings(body={running.destination: values})
         return val
 
     def format(self, running, name, result):
@@ -237,13 +227,11 @@ class ClusterWriteSettings(WriteSettings):
 @command(ClusterDispatcher, verb='ilm_status')
 class ClusterIlmStatus(DumpVerb):
 
-    @coroutine
-    def get(self, running, **kwargs):
+    async def get(self, running, **kwargs):
         return {}
 
-    @coroutine
-    def execute(self, running, **kwargs):
-        val = yield from self.api.escnx.ilm.get_status()
+    async def execute(self, running, **kwargs):
+        val = await self.api.escnx.ilm.get_status()
         return val
 
     def to_str(self, running, item):
