@@ -5,13 +5,13 @@ from io import BytesIO
 from elasticsearch.compat import urlencode
 import re
 import sys
-from enum import IntEnum
 import time
-from logging import Logger
 from asyncio import Queue, QueueEmpty, get_event_loop, wait_for, TimeoutError, wait
 import json
 import logging
 from eslib.exceptions import PyCurlException
+from eslib import curldebug
+
 
 logger = logging.getLogger('eslib.pycurlconnection')
 
@@ -220,50 +220,10 @@ def decode_body(handler):
     return (content_type, body)
 
 
-class CurlDebugType(IntEnum):
-    TEXT = 1
-    HEADER = 2
-    DATA = 4
-    SSL = 8
-
 
 def get_curl_debug(debug_filter, logger):
-    def _curl_debug(debug_type, data):
-        """
-        This is the implementation of the cURL debug callback.
-        :param debug_type:  what kind of data to debug.
-        :param data: the data to debug.
-        """
-
-        prefix = {pycurl.INFOTYPE_TEXT: '   ' if CurlDebugType.TEXT & debug_filter else False,
-                  pycurl.INFOTYPE_HEADER_IN: '<  ' if CurlDebugType.HEADER & debug_filter else False,
-                  pycurl.INFOTYPE_HEADER_OUT: '>  ' if CurlDebugType.HEADER & debug_filter else False,
-                  pycurl.INFOTYPE_DATA_IN: '<< ' if CurlDebugType.DATA & debug_filter else False,
-                  pycurl.INFOTYPE_DATA_OUT: '>> ' if CurlDebugType.DATA & debug_filter else False,
-                  pycurl.INFOTYPE_SSL_DATA_IN: '<S ' if CurlDebugType.SSL & debug_filter else False,
-                  pycurl.INFOTYPE_SSL_DATA_OUT: '>S ' if CurlDebugType.SSL & debug_filter else False
-                  }[debug_type]
-        if prefix is False:
-            return
-
-        # Some versions of PycURL provide the debug data as strings, and
-        # some as arrays of bytes, so we need to check the type of the
-        # provided data and convert it to strings before trying to
-        # manipulate it with the "replace", "strip" and "split" methods:
-        if not debug_type == pycurl.INFOTYPE_SSL_DATA_IN and not pycurl.INFOTYPE_SSL_DATA_OUT:
-            text = data.decode('utf-8', 'replace') if type(data) == bytes else data
-        else:
-            text = data.decode('unicode_escape', 'replace') if type(data) == bytes else data
-
-        # Split the debug data into lines and send a debug message for
-        # each line:
-        lines = [x for x in text.replace('\r\n', '\n').split('\n') if len(x) > 0]
-        for line in lines:
-            if isinstance(logger, Logger):
-                logger.debug("%s%s" % (prefix, line))
-            else:
-                print("%s%s" % (prefix, line), file=logger)
-    return _curl_debug
+    curl_debug_handler = curldebug.curl_debug_handler
+    return lambda x,y: curl_debug_handler(debug_filter, logger, x, y)
 
 
 class PyCurlMultiHander(object):
@@ -434,7 +394,7 @@ class PyCurlConnection(Connection):
                  http_auth=None, kerberos=False, user_agent="pycurl/eslib", timeout=10, http_version=None,
                  impersonate=None, bearer_token=None,
                  use_ssl=False, verify_certs=False, ssl_opts={},
-                 debug=False, debug_filter=CurlDebugType.HEADER + CurlDebugType.DATA, logger=sys.stderr,
+                 debug=False, debug_filter=curldebug.CurlDebugType.HEADER + curldebug.CurlDebugType.DATA, logger=sys.stderr,
                  **kwargs):
         super(PyCurlConnection, self).__init__(use_ssl=use_ssl, timeout=timeout, **kwargs)
 

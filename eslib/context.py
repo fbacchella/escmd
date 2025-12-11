@@ -194,7 +194,8 @@ class Context(object):
         if self.current_config['api']['connection_class'] == None:
             self.check_pycurl(**self.current_config['pycurl'])
 
-            from eslib.pycurlconnection import CurlDebugType, PyCurlConnection, http_versions, version_info
+            from eslib.pycurlconnection import PyCurlConnection, http_versions, version_info
+            from eslib.curldebug import CurlDebugType
             self.current_config['api']['connection_class'] = PyCurlConnection
 
         if str(self.current_config['api']['connection_class'].__name__) == 'PyCurlConnection':
