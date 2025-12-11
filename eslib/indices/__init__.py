@@ -4,15 +4,15 @@ from eslib.context import TypeHandling
 from eslib.verb import Verb, DumpVerb, RepeterVerb, ReadSettings, WriteSettings, CatVerb, List
 from eslib.dispatcher import dispatcher, command, Dispatcher
 from eslib.exceptions import ESLibError
-from asyncio import coroutine
+ 
 from json import dumps
 from elasticsearch.exceptions import NotFoundError, ElasticsearchException, RequestError
 import re
 from yaml import load
 try:
-    from yaml import CLoader as Loader, CDumper as Dumper
+    from yaml import CLoader as Loader
 except ImportError:
-    from yaml import Loader, Dumper
+    from yaml import Loader
 
 
 @dispatcher(object_name="index", default_filter_path='*.settings.index.uuid')
@@ -28,17 +28,15 @@ class IndicesDispatcher(Dispatcher):
         running.index_name = index_name
         return super().check_noun_args(running, index_name=index_name, **kwargs)
 
-    @coroutine
-    def get(self, running, index_name='_all', expand_wildcards=None, allow_no_indices=None, ignore_unavailable=None, filter_path='*'):
+    async def get(self, running, index_name='_all', expand_wildcards=None, allow_no_indices=None, ignore_unavailable=None, filter_path='*'):
         if expand_wildcards:
             expand_wildcards= 'all'
-        val = yield from self.api.escnx.indices.get(index=index_name,
+        return await self.api.escnx.indices.get(index=index_name,
                                                     expand_wildcards=expand_wildcards,
                                                     allow_no_indices=allow_no_indices,
                                                     ignore_unavailable=ignore_unavailable,
                                                     filter_path=filter_path,
         )
-        return val
 
 
 @command(IndicesDispatcher, verb='list')
@@ -118,25 +116,21 @@ class IndiciesForceMerge(Verb):
 
         return super().check_verb_args(running, *args, **kwargs)
 
-    @coroutine
-    def get(self, running, index_name, filter_path):
+    async def get(self, running, index_name, filter_path):
         running.index_name = index_name
-        val = yield from super().get(running, index_name=index_name, filter_path=filter_path)
-        return val
+        return await super().get(running, index_name=index_name, filter_path=filter_path)
 
-    @coroutine
-    def execute(self, running):
+    async def execute(self, running):
         if running.notranslog:
-            yield from self.api.escnx.indices.put_settings(index=running.index_name,
+            await self.api.escnx.indices.put_settings(index=running.index_name,
                                                            body={'index': {'translog': {'flush_threshold_size': '56b'}}})
         if running.codec is not None:
-            yield from self.api.escnx.indices.close(index=running.index_name)
-            yield from self.api.escnx.indices.put_settings(index=running.index_name,
+            await self.api.escnx.indices.close(index=running.index_name)
+            await self.api.escnx.indices.put_settings(index=running.index_name,
                                                            body={'index': {'codec': running.codec}})
-            yield from self.api.escnx.indices.open(index=running.index_name, wait_for_active_shards='all',
+            await self.api.escnx.indices.open(index=running.index_name, wait_for_active_shards='all',
                                                    timeout="%ds" % self.api.timeout)
-        val = yield from self.api.escnx.indices.forcemerge(running.index_name, max_num_segments=running.max_num_segments, flush=True)
-        return val
+        return await self.api.escnx.indices.forcemerge(running.index_name, max_num_segments=running.max_num_segments, flush=True)
 
     def result_is_valid(self, result):
         return result.get('_shards',{}).get('failed', -1) == 0
@@ -151,10 +145,8 @@ class IndiciesForceMerge(Verb):
 @command(IndicesDispatcher, verb='delete')
 class IndiciesDelete(RepeterVerb):
 
-    @coroutine
-    def action(self, element, *args, **kwargs):
-        val = yield from self.api.escnx.indices.delete(index=element[0])
-        return val
+    async def action(self, element, *args, **kwargs):
+        return await self.api.escnx.indices.delete(index=element[0])
 
     def check_verb_args(self, running):
         if running.index_name == '*' or running.index_name == '_all':
@@ -213,10 +205,9 @@ class IndiciesReindex(RepeterVerb):
         running.preserve = preserve
         return super().check_verb_args(running, *args, **kwargs)
 
-    @coroutine
-    def action(self, element, running):
+    async def action(self, element, running):
         if running.template_name is not None:
-            templates = yield from self.api.escnx.indices.get_template(name=running.template_name)
+            templates = await self.api.escnx.indices.get_template(name=running.template_name)
             if running.template_name in templates:
                 template = templates[running.template_name]
                 settings = template['settings']
@@ -240,12 +231,12 @@ class IndiciesReindex(RepeterVerb):
         else:
             infix = index_name
         new_index_name = running.prefix + infix + running.suffix
-        v = yield from self.api.escnx.indices.exists(index=new_index_name)
+        v = await self.api.escnx.indices.exists(index=new_index_name)
         if v:
             raise ESLibError('%s already exists' % new_index_name)
 
         if running.keep_mapping:
-            index = yield from self.api.escnx.indices.get(index_name, filter_path='*.mappings')
+            index = await self.api.escnx.indices.get(index_name, filter_path='*.mappings')
             for i in index.items():
                 mappings = i[1]['mappings']
             settings = {'index': {}}
@@ -270,27 +261,27 @@ class IndiciesReindex(RepeterVerb):
         else:
             lifecycle = None
 
-        for i in (yield from self.api.escnx.ilm.explain_lifecycle(index_name)).values():
+        for i in (await self.api.escnx.ilm.explain_lifecycle(index_name)).values():
             ilm = [x for x in i.values()][0]
             if ilm['managed'] and ilm['action'] != 'complete':
                 raise ESLibError('%s currently in life cycle processing' % index_name)
 
         # Create the index
-        yield from self.api.escnx.indices.create(index=new_index_name, body={'settings': new_index_settings, "mappings": mappings})
+        await self.api.escnx.indices.create(index=new_index_name, body={'settings': new_index_settings, "mappings": mappings})
 
         # Doing the reindexation
-        reindex_status = yield from self.api.escnx.reindex(
+        reindex_status = await self.api.escnx.reindex(
             body={"conflicts": "proceed", 'source': {'index': index_name},
                   'dest': {'index': new_index_name, 'version_type': 'external'}})
 
         # Ensure the minimum segments
-        yield from self.api.escnx.indices.forcemerge(new_index_name, max_num_segments=1, flush=True)
+        await self.api.escnx.indices.forcemerge(new_index_name, max_num_segments=1, flush=True)
 
         if lifecycle is not None:
-            yield from self.api.escnx.indices.put_settings(index=new_index_name, body={'index': {'lifecycle': lifecycle}})
+            await self.api.escnx.indices.put_settings(index=new_index_name, body={'index': {'lifecycle': lifecycle}})
 
         if ilm['managed']:
-            for i in (yield from self.api.escnx.ilm.explain_lifecycle(new_index_name)).values():
+            for i in (await self.api.escnx.ilm.explain_lifecycle(new_index_name)).values():
                 ilm_new = [x for x in i.values()][0]
             new_step_command = {
                 "current_step": {
@@ -315,14 +306,14 @@ class IndiciesReindex(RepeterVerb):
                 for a in aliases:
                     aliases_actions.append({'remove': {'index': index_name, 'alias': a}})
                     aliases_actions.append({'add': {'index': new_index_name, 'alias': a}})
-                yield from self.api.escnx.indices.update_aliases(body={'actions': aliases_actions})
+                await self.api.escnx.indices.update_aliases(body={'actions': aliases_actions})
 
             # If the old index is to be deleted, add the name as an alias
             if not running.preserve:
-                yield from self.api.escnx.indices.delete(index=index_name)
+                await self.api.escnx.indices.delete(index=index_name)
                 # the old index was not suffixed, keep it's name as an alias
                 if infix == index_name:
-                    yield from self.api.escnx.indices.update_aliases(body={
+                    await self.api.escnx.indices.update_aliases(body={
                         'actions': [
                             {'add': {'index': new_index_name, 'alias': index_name}}
                         ]
@@ -340,17 +331,14 @@ class IndiciesDump(DumpVerb):
 @command(IndicesDispatcher, verb='readsettings')
 class IndiciesReadSettings(ReadSettings):
 
-    @coroutine
-    def get_elements(self, running):
-        val = yield from self.api.escnx.cat.indices(index=running.index_name, format='json', h='index', expand_wildcards='all')
+    async def get_elements(self, running):
+        val = await self.api.escnx.cat.indices(index=running.index_name, format='json', h='index', expand_wildcards='all')
         return map(lambda x: x['index'], val)
 
-    @coroutine
-    def get_settings(self, running, element):
+    async def get_settings(self, running, element):
         # Can't use get_settings filtering of settings, because if settings name are given, or even '_all', flat_settings don't work any more
-        index_entry = yield from self.api.escnx.indices.get_settings(index=element, include_defaults=True, flat_settings=running.flat, expand_wildcards='all')
-        #index_entry = yield from self.api.escnx.indices.get(index=element, include_defaults=True, flat_settings=running.flat)
-        index_name, index_data = next(iter(index_entry.items()))
+        index_entry = await self.api.escnx.indices.get_settings(index=element, include_defaults=True, flat_settings=running.flat, expand_wildcards='all')
+        _, index_data = next(iter(index_entry.items()))
         new_settings = {}
         if running.flat:
             # remove 'index.' at the beginning of settings names
@@ -372,7 +360,6 @@ class IndiciesWriteSettings(WriteSettings):
         return index_names
 
     async def action(self, element, running):
-        print(running.values)
         return await self.api.escnx.indices.put_settings(body=running.values, index=element[0])
 
     def format(self, running, name, result):
@@ -400,10 +387,8 @@ class IndiciesAddMapping(RepeterVerb):
         running.type = type
         return super().check_verb_args(running, *args, **kwargs)
 
-    @coroutine
-    def action(self, element, running):
-        val = yield from self.api.escnx.indices.put_mapping(index=element[0], body={"properties": running.properties}, doc_type=running.type)
-        return val
+    async def action(self, element, running):
+        return await self.api.escnx.indices.put_mapping(index=element[0], body={"properties": running.properties}, doc_type=running.type)
 
     def to_str(self, running, value):
         return "%s -> %s" % (list(running.object.keys())[0], value.__str__())
@@ -422,20 +407,16 @@ class IndicesGetFieldMapping(RepeterVerb):
         running.flat = flat
         return super().check_verb_args(running, *args, **kwargs)
 
-    @coroutine
-    def get(self, running):
-        val = yield from self.api.escnx.cat.indices(index=running.index_name, format='json', h='index')
-        return val
+    async def get(self, running):
+        return await self.api.escnx.cat.indices(index=running.index_name, format='json', h='index')
 
-    @coroutine
-    def get_elements(self, running):
+    async def get_elements(self, running):
         index_names = []
         for i in running.object:
             index_names.append((i['index'], None))
         return index_names
 
-    @coroutine
-    def action(self, element, running):
+    async def action(self, element, running):
         kwargs={}
         if self.api.type_handling == TypeHandling.DEPRECATED:
             kwargs['doc_type'] = None
@@ -445,7 +426,7 @@ class IndicesGetFieldMapping(RepeterVerb):
             kwargs['doc_type'] = None
 
         try:
-            val = yield from self.api.escnx.indices.get_mapping(index=element[0], **kwargs)
+            val = await self.api.escnx.indices.get_mapping(index=element[0], **kwargs)
             return val
         except NotFoundError as e:
             return e
@@ -509,14 +490,11 @@ class IndicesCreate(Verb):
         running.max_num_segments = max_num_segments
         return super().check_verb_args(running, *args, **kwargs)
 
-    @coroutine
-    def get(self, running, **kwargs):
+    async def get(self, running, **kwargs):
         return None
 
-    @coroutine
-    def execute(self, running):
-        val = yield from self.api.escnx.indices.create(running.index_name)
-        return val
+    async def execute(self, running):
+        return await self.api.escnx.indices.create(running.index_name)
 
     def to_str(self, running, value):
         name = value.get('index', None)
@@ -543,10 +521,8 @@ class IndicesStats(DumpVerb):
         running.flat = flat
         return super().check_verb_args(running, *args, **kwargs)
 
-    @coroutine
-    def action(self, element, running, *args, only_keys=False, **kwargs):
-        val = yield from self.api.escnx.indices.stats(element[0], metric=running.metrics)
-        return val
+    async def action(self, element, running, *args, only_keys=False, **kwargs):
+        return await self.api.escnx.indices.stats(element[0], metric=running.metrics)
 
     def to_str(self, running, value):
         if running.flat:
@@ -579,10 +555,8 @@ class IndicesExplainLifecycl(DumpVerb):
         running.only_managed = only_managed
         return super().check_verb_args(running, *args, **kwargs)
 
-    @coroutine
-    def action(self, element, running, *args, only_keys=False, **kwargs):
-        val = yield from self.api.escnx.ilm.explain_lifecycle(element[0], only_errors=running.only_errors, only_managed=running.only_managed)
-        return val
+    async def action(self, element, running, *args, only_keys=False, **kwargs):
+        return await self.api.escnx.ilm.explain_lifecycle(element[0], only_errors=running.only_errors, only_managed=running.only_managed)
 
     def to_str(self, running, value):
         return dumps(value[1])
@@ -591,10 +565,8 @@ class IndicesExplainLifecycl(DumpVerb):
 @command(IndicesDispatcher, verb='retry_policy')
 class IndicesRetryPolicy(RepeterVerb):
 
-    @coroutine
-    def action(self, element, running, *args, only_keys=False, **kwargs):
-        val = yield from self.api.escnx.ilm.retry(element[0])
-        return val
+    async def action(self, element, running, *args, only_keys=False, **kwargs):
+        return await self.api.escnx.ilm.retry(element[0])
 
     def to_str(self, running, value):
         return dumps(value[1])
@@ -609,7 +581,7 @@ class IndicesSegments(RepeterVerb):
     def to_str(self, running, value):
         segments_data = value[1]['indices'][value[0][0]]
         datas = {}
-        for (s,replica) in segments_data['shards'].items():
+        for (_, replica) in segments_data['shards'].items():
             for segments in replica:
                 for si in segments['segments'].values():
                     datas[si['generation']]={'num_docs': si['num_docs'], 'deleted_docs': si['deleted_docs'], 'size_in_bytes': si['size_in_bytes'],
@@ -693,7 +665,7 @@ class ClusterAllocationExplain(DumpVerb):
         if running.primary is not None:
             body['primary'] = running.primary
         try:
-            val = self.api.escnx.cluster.allocation_explain(body=body)
+            val = await self.api.escnx.cluster.allocation_explain(body=body)
         except RequestError as e:
             if e.error == 'illegal_argument_exception':
                 reason = e.info.get('error', {}).get('reason','')
@@ -704,7 +676,7 @@ class ClusterAllocationExplain(DumpVerb):
             else:
                 raise e
             val = None
-        return await val
+        return val
 
     def to_str(self, running, item):
         return json.dumps(item, **running.formatting)
