@@ -1,5 +1,3 @@
-from asyncio import coroutine
-
 from eslib.verb import Verb
 from eslib.dispatcher import dispatcher, command, Dispatcher
 
@@ -10,8 +8,7 @@ class XPackDispatcher(Dispatcher):
     def execute(self):
         pass
 
-    @coroutine
-    def get(self, running):
+    async def get(self, running):
         pass
 
 
@@ -26,10 +23,9 @@ class XPackLicense(Verb):
         running.delete = delete
         return super().check_verb_args(running, *args, **kwargs)
 
-    @coroutine
-    def execute(self, running):
+    async def execute(self, running):
         if running.delete:
-            val = yield from self.api.escnx.xpack.license.delete()
+            val = await self.api.escnx.xpack.license.delete()
         else:
             val = None
         return val
