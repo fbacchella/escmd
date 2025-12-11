@@ -88,13 +88,11 @@ class Verb(object):
 
 class RepeterVerb(Verb):
 
-    @coroutine
-    def execute(self, running, *args, **kwargs):
+    async def execute(self, running, *args, **kwargs):
         try:
-            elements = yield from self.get_elements(running)
+            elements = await self.get_elements(running)
         except Exception as ex:
-            # ex needs to be passed as argument, because of the 'yield from' magic,
-            # it's not defined when defining the function
+            # ex needs to be passed as argument
             def enumerator(ex):
                 ex.source = object
                 yield ex
@@ -105,7 +103,7 @@ class RepeterVerb(Verb):
             task.element = e
             coros.append(task)
         if len(coros) > 0:
-            done, pending = await wait(coros)
+            done, _ = await wait(coros)
             def enumerator():
                 for i in done:
                     if i.exception() is not None:
