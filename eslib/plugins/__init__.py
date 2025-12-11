@@ -1,8 +1,5 @@
 from eslib.verb import CatVerb
 from eslib.dispatcher import dispatcher, command, Dispatcher
-from asyncio import coroutine
-import datetime
-import time
 
 
 @dispatcher(object_name="plugin")
