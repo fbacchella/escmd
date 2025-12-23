@@ -8,7 +8,7 @@ import json
 @dispatcher(object_name="cluster")
 class ClusterDispatcher(Dispatcher):
 
-    def get(self, running, **kwargs):
+    async def get(self, running, **kwargs):
         return {}
 
 
@@ -95,6 +95,9 @@ class ClusterAllocationExplain(DumpVerb):
         running.shard = shard
         return super().check_verb_args(running, *args, **kwargs)
 
+    async def get(self, running, filter_path=None, **kwargs):
+        return {}
+
     async def execute(self, running, **kwargs):
         body = {}
         if running.index is not None:
@@ -106,7 +109,7 @@ class ClusterAllocationExplain(DumpVerb):
         if running.primary is not None:
             body['primary'] = running.primary
         try:
-            val = await self.api.escnx.cluster.allocation_explain(body=body)
+            return await self.api.escnx.cluster.allocation_explain(body=body)
         except RequestError as e:
             if e.error == 'illegal_argument_exception':
                 reason = e.info.get('error', {}).get('reason','')
@@ -116,8 +119,6 @@ class ClusterAllocationExplain(DumpVerb):
                     raise e
             else:
                 raise e
-            val = None
-        return val
 
     def to_str(self, running, item):
         return json.dumps(item, **running.formatting)
