@@ -45,20 +45,3 @@ def curl_debug_handler(debug_filter, logger, debug_type, data):
             logger.debug("%s%s" % (prefix, line))
         else:
             print("%s%s" % (prefix, line), file=logger)
-        # Some versions of PycURL provide the debug data as strings, and
-        # some as arrays of bytes, so we need to check the type of the
-        # provided data and convert it to strings before trying to
-        # manipulate it with the "replace", "strip" and "split" methods:
-        if not debug_type == pycurl.INFOTYPE_SSL_DATA_IN and not pycurl.INFOTYPE_SSL_DATA_OUT:
-            text = data.decode('utf-8', 'replace') if type(data) == bytes else data
-        else:
-            text = data.decode('unicode_escape', 'replace') if type(data) == bytes else data
-
-        # Split the debug data into lines and send a debug message for
-        # each line:
-        lines = [x for x in text.replace('\r\n', '\n').split('\n') if len(x) > 0]
-        for line in lines:
-            if isinstance(logger, Logger):
-                logger.debug("%s%s" % (prefix, line))
-            else:
-                print("%s%s" % (prefix, line), file=logger)
