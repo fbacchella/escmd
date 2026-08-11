@@ -680,3 +680,33 @@ class ClusterAllocationExplain(DumpVerb):
 
     def to_str(self, running, item):
         return json.dumps(item, **running.formatting)
+
+
+@command(IndicesDispatcher, verb='ilm')
+class IndicesIlmExplain(RepeterVerb):
+    def fill_parser(self, parser):
+        parser.add_option("--only_errors", dest="errors", default=False, action='store_true')
+        parser.add_option("--only_managed", dest="managed", default=False, action='store_true')
+        parser.add_option("-p", "--phase", dest="phase")
+        super().fill_parser(parser)
+
+    def check_verb_args(self, running, *args, errors=False, managed=False, phase=None, **kwargs):
+        running.args = args
+        running.phase = phase
+        running.managed = managed or phase is not None
+        running.errors = errors
+        return super().check_verb_args(running, *args, **kwargs)
+
+    async def action(self, element, running, *args, only_keys=False, **kwargs):
+        return await self.api.escnx.ilm.explain_lifecycle(index=element[0], only_managed=running.managed, only_errors=running.errors)
+
+    def to_str(self, running, value):
+        for (index, ilm) in value[1]['indices'].items():
+            if 'phase' in ilm and ilm['phase'] == running.phase:
+                yield index
+            elif running.phase is None and ilm['managed']:
+                yield "%s %s %s %s" %(index, ilm['phase'], ilm['action'], ilm['step'])
+            elif running.phase is None and not ilm['managed']:
+                yield "%s no ILM" % index
+            elif running.phase is None:
+                yield index
