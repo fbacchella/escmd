@@ -1,6 +1,6 @@
  
 from eslib.dispatcher import dispatcher, command, Dispatcher
-from eslib.verb import ReadSettings, WriteSettings, DumpVerb, CatVerb
+from eslib.verb import ReadSettings, WriteSettings, DumpVerb, CatVerb, Verb
 from elasticsearch.exceptions import RequestError
 
 import json
@@ -237,3 +237,20 @@ class ClusterIlmStatus(DumpVerb):
 
     def to_str(self, running, item):
         return item['operation_mode']
+
+
+@command(ClusterDispatcher, verb='delete_rebalance')
+class DeleteRebalance(Verb):
+
+    async def execute(self, running, **kwargs):
+        val = await self.api.escnx.transport.perform_request('DELETE', '/_internal/desired_balance', {'accept': 'application/json'})
+        if val == "":
+            return {'ok': True}
+        else:
+            return val
+
+    def to_str(self, running, item):
+        if isinstance(item, dict) and item.get('ok') is True:
+            return "OK"
+        else:
+            return json.dumps(item, default=str)
