@@ -437,6 +437,7 @@ class PyCurlConnection(Connection):
             pycurl.USERAGENT: self.user_agent,
             pycurl.ACCEPT_ENCODING: None if self.debug else "",
             pycurl.TIMEOUT: self.timeout,
+            pycurl.CONNECTTIMEOUT: 2,
             #pycurl.NOSIGNAL: True,
             # We manage ourself our buffer, Help from Nagle is not needed
             pycurl.TCP_NODELAY: 1,
