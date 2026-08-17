@@ -63,11 +63,15 @@ class ShardsMove(Verb):
 
 class ShardTreeNode(TreeNode):
 
+    def __init__(self, value, flat):
+        super().__init__(value)
+        self.flat = flat
+
     def _value_to_str(self, level):
         if level < 2:
             return self.value
         else:
-            (allocation, version, node) = (None, None, '')
+            (allocation, node) = (None, '')
             for (k, v) in self.value.items():
                 if k == 'allocation':
                     if v == 'primary':
@@ -76,11 +80,14 @@ class ShardTreeNode(TreeNode):
                         allocation = '-'
                     else:
                         allocation = ' '
-                elif k == 'version':
-                    version = v
                 elif isinstance(v, dict) and 'name' in v:
                     node = v['name']
-            return "%s %s %s" %(allocation, version, node)
+            if self.flat:
+                index = self.parent.parent.value
+                shard = self.parent.value
+                return "%s:%s:%s" %(index, shard, node)
+            else:
+                return "%s %s" %(allocation, node)
 
 
 @command(ShardsDispatcher, verb='tree')
