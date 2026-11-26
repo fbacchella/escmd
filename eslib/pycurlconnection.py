@@ -517,7 +517,7 @@ class PyCurlConnection(Connection):
 
     def perform_request(self, method, url, params=None, body=None, headers={}, ignore=(), future=None, timeout=None):
         url = self.url_prefix + url
-        if params is not None:
+        if params:
             url = '%s?%s' % (url, urlencode(params))
         full_url = self.host + url
         curl_handle = self._get_curl_handler(headers)
