@@ -137,7 +137,7 @@ class ShardsCat(CatVerb):
 
     def fill_parser(self, parser):
         super().fill_parser(parser)
-        parser.add_option("-l", "--local", dest="local", default=False, action='store_true')
+        parser.add_option("-i", "--index", dest="index", default=None)
 
     def get_source(self):
         return self.api.escnx.cat.shards
